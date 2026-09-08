@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://cwiln01cq8hla"]
+
+[ext_resource type="Script" uid="uid://rnq2omk2opmx" path="res://scripts/game.gd" id="1"]
+
+[node name="AboveTheClouds" type="Node3D" unique_id=1498434315]
+script = ExtResource("1")

@@ -1,0 +1,20 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+/builds/*
+!/builds/tooling/
+/builds/tooling/*
+!/builds/tooling/web-export.cfg
+/export/
+/tests/runtime/
+/tests/artifacts/
+*.log
+*.tmp
+*.bak
+/tests/*.png
+/tests/*.jpg
+node_modules/
+.env
+.env.*
+!.env.example
+/addons/
