@@ -12,6 +12,9 @@ var refresh_clock = 0.0
 var sleep_cover: ColorRect
 var body: PanelContainer
 var sidebar: VBoxContainer
+var panel_layout: VBoxContainer
+var mobile_portrait = false
+var mobile_navigation: HFlowContainer
 var content_scroll: ScrollContainer
 var close_button: Button
 var state_text: Label
@@ -62,6 +65,7 @@ func _ready():
 	overlay.add_child(body)
 	style(body)
 	var layout = VBoxContainer.new()
+	panel_layout = layout
 	layout.add_theme_constant_override("separation", 10)
 	body.add_child(layout)
 	var header = HBoxContainer.new()
@@ -143,7 +147,8 @@ func configure_mobile_layout():
 	if not is_instance_valid(game.touch_controls) or not game.touch_controls.enabled: return
 	var view = get_viewport_rect().size
 	var portrait = view.y > view.x
-	var factor = 2.7 if portrait else 1.45
+	mobile_portrait = portrait
+	var factor = 3.35 if portrait else 1.45
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	overlay.position = Vector2.ZERO
 	overlay.size = view / factor
@@ -154,7 +159,7 @@ func configure_mobile_layout():
 	body.offset_bottom = -10
 	sidebar.custom_minimum_size.x = 125 if portrait else 160
 	resource_cards[0].get_parent().get_parent().get_parent().hide()
-	content_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	content_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED if portrait else ScrollContainer.SCROLL_MODE_AUTO
 	close_button.text = "×"
 	close_button.custom_minimum_size = Vector2(45, 45)
 	var names = {"camp": "Лагерь", "projects": "Проекты", "crew": "Команда", "upgrades": "Улучшения", "journal": "Дневник", "settings": "Настройки"}
@@ -162,6 +167,20 @@ func configure_mobile_layout():
 		var button_node: Button = nav_buttons[key]
 		button_node.custom_minimum_size.y = 50 if portrait else 58
 		Kit.caption(button_node, names[key])
+		if portrait: button_node.add_theme_font_size_override("font_size", 16)
+	if portrait:
+		var navigation = HFlowContainer.new()
+		mobile_navigation = navigation
+		navigation.add_theme_constant_override("h_separation", 4)
+		navigation.add_theme_constant_override("v_separation", 4)
+		panel_layout.add_child(navigation)
+		panel_layout.move_child(navigation, 2)
+		for key in nav_buttons:
+			var item: Button = nav_buttons[key]
+			sidebar.remove_child(item)
+			item.custom_minimum_size = Vector2(120, 44)
+			navigation.add_child(item)
+		sidebar.hide()
 
 func style(panel: Control):
 	panel.add_theme_stylebox_override("panel", Kit.box(false, 14))
@@ -183,8 +202,8 @@ func button(parent: Node, value: String, action: Callable) -> Button:
 	parent.add_child(b)
 	return b
 
-func row() -> HBoxContainer:
-	var result = HBoxContainer.new()
+func row() -> BoxContainer:
+	var result: BoxContainer = VBoxContainer.new() if mobile_portrait else HBoxContainer.new()
 	result.add_theme_constant_override("separation", 10)
 	content.add_child(result)
 	return result
@@ -247,7 +266,8 @@ func build_panel():
 		child.queue_free()
 	title.text = {"projects": "Передвижная IT-студия", "camp": "Наша стоянка", "crew": "Команда экспедиции", "journal": "Путевой дневник", "upgrades": "Мастерская Буханки", "settings": "Настройки экспедиции", "placement": "Выбор места для лагеря", "editor": "Кто отправится выше облаков?", "rescue": "Помощь из долины", "new": "Новая экспедиция"}.get(section, section)
 	if is_instance_valid(game.touch_controls) and game.touch_controls.enabled:
-		sidebar.visible = section != "editor"
+		sidebar.visible = section != "editor" and not mobile_portrait
+		if is_instance_valid(mobile_navigation): mobile_navigation.visible = section != "editor"
 		title.text = {"editor": "Наша команда", "camp": "Лагерь", "projects": "Проекты", "crew": "Команда", "journal": "Дневник", "upgrades": "Улучшения", "settings": "Настройки"}.get(section, title.text)
 	match section:
 		"projects": build_projects()

@@ -158,17 +158,18 @@ func build_editor():
 	var g = ui.game
 	ui.text(ui.content, "Соберите свою четвёрку или оставьте готовую команду. Модель сразу показывает выбранные цвета и головной убор.", 15)
 	var strip = ScrollContainer.new()
-	strip.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	strip.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	strip.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED if ui.mobile_portrait else ScrollContainer.SCROLL_MODE_AUTO
+	strip.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if ui.mobile_portrait else ScrollContainer.SCROLL_MODE_DISABLED
 	strip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	strip.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	ui.content.add_child(strip)
-	var cards = HBoxContainer.new()
+	var cards: BoxContainer = VBoxContainer.new() if ui.mobile_portrait else HBoxContainer.new()
+	cards.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cards.add_theme_constant_override("separation", 10)
 	strip.add_child(cards)
 	for i in range(4):
 		var hero = g.model.crew[i]
-		var card = Kit.card(cards, 205)
+		var card = Kit.card(cards, 0 if ui.mobile_portrait else 205)
 		card.add_theme_constant_override("separation", 5)
 		var viewport = person_preview(card, hero, 125)
 		var name_edit = LineEdit.new()

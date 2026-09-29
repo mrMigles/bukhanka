@@ -1,7 +1,7 @@
 extends Node3D
 ## Deterministic streamed landscape. Rendering and driving share the height field.
 const LENGTH = 144.0
-const STEP = 3.0
+var STEP = 3.0
 const ROAD_STEP = 1.5
 const EDGES = [-3.4, -2.0, -1.55, -0.85, 0.85, 1.55, 2.0, 3.4]
 var road_material = ShaderMaterial.new()
@@ -28,6 +28,7 @@ var building_chunk = false
 var birds: Array[Node3D] = []
 
 func _ready():
+	if OS.has_feature("web"): STEP = 6.0
 	noise.seed = seed_value
 	noise.frequency = 0.006
 	noise.fractal_octaves = 4
@@ -221,17 +222,19 @@ func finish(st: SurfaceTool, parent: Node3D, mat: Material) -> MeshInstance3D:
 func update_chunks(z: float, immediate = false):
 	director.prune(z)
 	var center = int(floor(z / LENGTH))
+	var behind = 1 if OS.has_feature("web") else 3
+	var ahead = 5 if OS.has_feature("web") else 9
 	for key in chunks.keys():
-		if key < center - 3 or key > center + 9:
+		if key < center - behind or key > center + ahead:
 			chunks[key].queue_free()
 			chunks.erase(key)
 			obstacles.erase(key)
 	if building_chunk and not immediate: return
 	# Fill the road around the player first; distant scenery can arrive later.
 	var order: Array[int] = [center]
-	for distance in range(1, 10):
-		if center + distance <= center + 9: order.append(center + distance)
-		if center - distance >= center - 3: order.append(center - distance)
+	for distance in range(1, ahead + 1):
+		if center + distance <= center + ahead: order.append(center + distance)
+		if center - distance >= center - behind: order.append(center - distance)
 	for i in order:
 		if not chunks.has(i):
 			build_chunk(i, immediate)
@@ -342,17 +345,15 @@ func build_chunk(index: int, immediate: bool = true):
 		trees.multimesh.set_instance_transform(i, transforms[i])
 	trees.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(trees)
+	var river_rocks: Array[Transform3D] = []
 	for j in range(16):
 		var z = rng.randf_range(start, start + LENGTH)
 		var x = river_x(z) + rng.randf_range(-19, 19)
 		if abs(x - road_x(z)) < 6 or abs(x - branch_x(z)) < 6:
 			continue
-		var rock = MeshInstance3D.new()
-		rock.mesh = rock_mesh
-		rock.material_override = wood
-		rock.position = Vector3(x, ground(x, z), z)
-		rock.scale = Vector3(rng.randf_range(1.4, 3.5), rng.randf_range(1.2, 3.0), rng.randf_range(1.5, 4))
-		root.add_child(rock)
+		var size = Vector3(rng.randf_range(1.4, 3.5), rng.randf_range(1.2, 3.0), rng.randf_range(1.5, 4))
+		river_rocks.append(Transform3D(Basis().scaled(size), Vector3(x, ground(x, z), z)))
+	add_rock_batch(root, river_rocks, wood)
 	decorate_chunk(root, index, rng)
 	preload("res://scripts/scenery.gd").populate(self, root, index, rng)
 	building_chunk = false
@@ -391,9 +392,22 @@ func box(parent: Node3D, pos: Vector3, size: Vector3, mat: Material) -> MeshInst
 	mesh.size = size
 	node.mesh = mesh
 	node.material_override = mat
+	if OS.has_feature("web"): node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	node.position = pos
 	parent.add_child(node)
 	return node
+
+func add_rock_batch(parent: Node3D, transforms: Array[Transform3D], mat: Material):
+	if transforms.is_empty(): return
+	var batch = MultiMeshInstance3D.new()
+	batch.multimesh = MultiMesh.new()
+	batch.multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	batch.multimesh.mesh = rock_mesh
+	batch.multimesh.instance_count = transforms.size()
+	for i in range(transforms.size()): batch.multimesh.set_instance_transform(i, transforms[i])
+	batch.material_override = mat
+	batch.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(batch)
 
 func collides(pos: Vector3) -> bool:
 	if director.shell_blocked(pos, true): return true
@@ -431,16 +445,17 @@ func decorate_chunk(root: Node3D, index: int, rng: RandomNumberGenerator):
 		box(root, Vector3(x, h + 0.5, z), Vector3(2.3, 0.18, 0.65), wood)
 		box(root, Vector3(x, h + 0.2, z), Vector3(0.4, 0.5, 0.5), wood)
 	# Clusters of low boulders, coarse gravel and alpine shrubs.
+	var pale_rocks: Array[Transform3D] = []
+	var dark_rocks: Array[Transform3D] = []
 	for j in range(38):
 		var rz = index * LENGTH + rng.randf_range(0, LENGTH)
 		var rx = route_x(rz, j % 2) + rng.randf_range(4.5, 10.0) * (-1 if j % 3 == 0 else 1)
 		if abs(rx - road_x(rz)) < 4 or abs(rx - branch_x(rz)) < 4: continue
-		var rock = MeshInstance3D.new()
-		rock.mesh = rock_mesh
-		rock.material_override = marker if j % 3 else wood
-		root.add_child(rock)
-		rock.position = Vector3(rx, drive_height(rx, rz), rz)
-		rock.scale = Vector3.ONE * rng.randf_range(0.3, 1.6)
+		var transform = Transform3D(Basis().scaled(Vector3.ONE * rng.randf_range(0.3, 1.6)), Vector3(rx, drive_height(rx, rz), rz))
+		if j % 3: pale_rocks.append(transform)
+		else: dark_rocks.append(transform)
+	add_rock_batch(root, pale_rocks, marker)
+	add_rock_batch(root, dark_rocks, wood)
 func camera_blocked(point: Vector3) -> bool:
 	if director.shell_blocked(point): return true
 	if point.y < drive_height(point.x, point.z) + 0.45: return true
@@ -496,7 +511,7 @@ func animate_wildlife(player: Vector3, time: float, delta: float):
 			leg.rotation.x = sin(time * (12 if alarm else 5) + leg.position.x * 10 + leg.position.z * 8) * (0.35 if walking else 0.0)
 
 func safe_camera(look: Vector3, target: Vector3) -> Vector3:
-	var steps = maxi(12, int(ceil(look.distance_to(target))))
+	var steps = maxi(5, int(ceil(look.distance_to(target) / 3.0))) if OS.has_feature("web") else maxi(12, int(ceil(look.distance_to(target))))
 	for i in range(2, steps + 1):
 		var t = float(i) / steps
 		var point = look.lerp(target, t)

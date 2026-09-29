@@ -107,10 +107,19 @@ func _ready():
 			tire.rotation.z = PI / 2
 			var cap = cylinder(rolling, Vector3(signf(x) * 0.18, 0, 0), 0.3, 0.035, chrome)
 			cap.rotation.z = PI / 2
+			var treads: Array[Transform3D] = []
 			for k in range(12):
 				var a = k * TAU / 12
-				var tread = box(rolling, Vector3(0, sin(a) * 0.53, cos(a) * 0.53), Vector3(0.35, 0.1, 0.12), dark)
-				tread.rotation.x = -a
+				treads.append(Transform3D(Basis(Vector3.RIGHT, -a).scaled(Vector3(0.35, 0.1, 0.12)), Vector3(0, sin(a) * 0.53, cos(a) * 0.53)))
+			var tread_batch = MultiMeshInstance3D.new()
+			tread_batch.multimesh = MultiMesh.new()
+			tread_batch.multimesh.transform_format = MultiMesh.TRANSFORM_3D
+			tread_batch.multimesh.mesh = BoxMesh.new()
+			tread_batch.multimesh.instance_count = treads.size()
+			for k in range(treads.size()): tread_batch.multimesh.set_instance_transform(k, treads[k])
+			tread_batch.material_override = dark
+			if OS.has_feature("web"): tread_batch.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			rolling.add_child(tread_batch)
 	roof = Node3D.new()
 	add_child(roof)
 	box(roof, Vector3(0, 2.62, 0), Vector3(2.36, 0.19, 4.55), cream)
@@ -147,6 +156,29 @@ func _ready():
 	add_child(home)
 	decor = Node3D.new()
 	roof.add_child(decor)
+	batch_body_boxes()
+
+func batch_body_boxes():
+	var groups = {}
+	for child in get_children():
+		if not child is MeshInstance3D or not child.mesh is BoxMesh or child.material_override == glass: continue
+		var key = child.material_override.get_instance_id()
+		if not groups.has(key): groups[key] = []
+		groups[key].append(child)
+	for group in groups.values():
+		if group.size() < 2: continue
+		var batch = MultiMeshInstance3D.new()
+		batch.multimesh = MultiMesh.new()
+		batch.multimesh.transform_format = MultiMesh.TRANSFORM_3D
+		batch.multimesh.mesh = BoxMesh.new()
+		batch.multimesh.instance_count = group.size()
+		batch.material_override = group[0].material_override
+		for i in range(group.size()):
+			var part: MeshInstance3D = group[i]
+			var box_mesh: BoxMesh = part.mesh
+			batch.multimesh.set_instance_transform(i, part.transform * Transform3D(Basis().scaled(box_mesh.size), Vector3.ZERO))
+			part.queue_free()
+		add_child(batch)
 
 func update_upgrades(levels: Array):
 	house_level = levels[1]

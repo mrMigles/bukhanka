@@ -116,6 +116,9 @@ static func food_cluster(w: Node, root: Node3D, item: Dictionary, apple: bool = 
 	var leaf_light = w.material(Color("527b4d"))
 	var fruit = w.material(Color("b83f43") if apple else Color("702d5d"))
 	var count = 1 if apple else 3
+	var light_canopies: Array[Transform3D] = []
+	var dark_canopies: Array[Transform3D] = []
+	var fruits: Array[Transform3D] = []
 	for i in range(count):
 		var spread = 0.0 if apple else 1.7
 		var p = Vector3(item.x + sin(i * 2.3) * spread, 0, item.z + cos(i * 2.3) * spread)
@@ -129,24 +132,22 @@ static func food_cluster(w: Node, root: Node3D, item: Dictionary, apple: bool = 
 				branch.rotation.x = sin(branch_index * TAU / 3) * 0.55
 		for cluster_index in range(5 if apple else 3):
 			var angle = cluster_index * TAU / (5.0 if apple else 3.0) + i
-			var canopy = MeshInstance3D.new()
-			canopy.mesh = w.rock_mesh
-			canopy.material_override = leaf_light if cluster_index % 2 == 0 else leaf_dark
-			canopy.position = p + Vector3(cos(angle) * (0.75 if apple else 0.32), (2.65 if apple else 0.65) + sin(angle * 2) * 0.18, sin(angle) * (0.75 if apple else 0.32))
-			canopy.scale = Vector3(1.0, 0.78, 1.0) * (1.0 if apple else 0.52)
-			root.add_child(canopy)
+			var canopy_position = p + Vector3(cos(angle) * (0.75 if apple else 0.32), (2.65 if apple else 0.65) + sin(angle * 2) * 0.18, sin(angle) * (0.75 if apple else 0.32))
+			var canopy_scale = Vector3(1.0, 0.78, 1.0) * (1.0 if apple else 0.52)
+			var canopy_transform = Transform3D(Basis().scaled(canopy_scale), canopy_position)
+			if cluster_index % 2 == 0: light_canopies.append(canopy_transform)
+			else: dark_canopies.append(canopy_transform)
 		if not apple:
 			for stem_index in range(3):
 				var stem = w.box(root, p + Vector3(cos(stem_index * 2.1) * 0.18, 0.34, sin(stem_index * 2.1) * 0.18), Vector3(0.055, 0.72, 0.055), w.wood)
 				stem.rotation.z = cos(stem_index * 2.1) * 0.28
 		for fruit_index in range(8 if apple else 6):
 			var a = fruit_index * 2.399 + i
-			var berry = MeshInstance3D.new()
-			berry.mesh = w.rock_mesh
-			berry.material_override = fruit
-			berry.position = p + Vector3(cos(a) * (0.95 if apple else 0.43), (2.55 if apple else 0.55) + sin(a * 1.7) * (0.48 if apple else 0.22), sin(a) * (0.95 if apple else 0.43))
-			berry.scale = Vector3.ONE * (0.13 if apple else 0.065)
-			harvest_visual.add_child(berry)
+			var berry_position = p + Vector3(cos(a) * (0.95 if apple else 0.43), (2.55 if apple else 0.55) + sin(a * 1.7) * (0.48 if apple else 0.22), sin(a) * (0.95 if apple else 0.43))
+			fruits.append(Transform3D(Basis().scaled(Vector3.ONE * (0.13 if apple else 0.065)), berry_position))
+	w.add_rock_batch(root, light_canopies, leaf_light)
+	w.add_rock_batch(root, dark_canopies, leaf_dark)
+	w.add_rock_batch(harvest_visual, fruits, fruit)
 
 static func tunnel(w: Node, root: Node3D, item: Dictionary):
 	var rock = w.material(Color("687775"))
@@ -215,6 +216,7 @@ static func waterfall(w: Node, root: Node3D, z: float):
 		ledge.material_override = rock
 		ledge.position = Vector3(x + side * 1.0, bottom + 2, z)
 		ledge.scale = Vector3(3.0, 5.0, 6.0 - tier * 0.6)
+		ledge.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(ledge)
 		w.obstacles[int(floor(z / 144.0))].append(Vector3(x + side * 1.0, 1.9, z))
 		var st = SurfaceTool.new()

@@ -110,6 +110,7 @@ func _ready():
 	test_mode = "--test-mode" in OS.get_cmdline_user_args()
 	if OS.has_feature("web"):
 		get_viewport().msaa_3d = Viewport.MSAA_DISABLED
+		get_viewport().scaling_3d_scale = 0.68
 	saves.backup_legacy(test_mode)
 	var fresh = get_tree().root.get_meta("fresh_expedition", false)
 	get_tree().root.remove_meta("fresh_expedition")
@@ -205,7 +206,7 @@ func setup_environment():
 	sun.rotation_degrees = Vector3(-31, -37, 0)
 	sun.light_color = Color("ffdfac")
 	sun.light_energy = 1.0
-	sun.shadow_enabled = true
+	sun.shadow_enabled = not OS.has_feature("web")
 	sun.directional_shadow_max_distance = 110 if OS.has_feature("web") else 170
 	add_child(sun)
 
