@@ -78,6 +78,8 @@ var dialogue_index = 0
 var toast_timer = 0.0
 var save_timer = 0.0
 var chunk_timer = 0.0
+var lighting_timer = 0.0
+var web_save_callback
 var last_km = 0
 var stuck_timer = 0.0
 var test_mode = false
@@ -106,6 +108,8 @@ var chatter = [
 
 func _ready():
 	test_mode = "--test-mode" in OS.get_cmdline_user_args()
+	if OS.has_feature("web"):
+		get_viewport().msaa_3d = Viewport.MSAA_DISABLED
 	saves.backup_legacy(test_mode)
 	var fresh = get_tree().root.get_meta("fresh_expedition", false)
 	get_tree().root.remove_meta("fresh_expedition")
@@ -126,7 +130,12 @@ func _ready():
 	van.rotation.y = heading
 	van.update_upgrades(levels)
 	van.update_solar(model)
-	world.update_chunks(van.position.z, true)
+	if test_mode:
+		world.update_chunks(van.position.z, true)
+	else:
+		var center = int(floor(van.position.z / world.LENGTH))
+		world.build_chunk(center)
+		world.build_chunk(center + 1)
 	time = model.simulation_seconds
 	camera = Camera3D.new()
 	camera.fov = 65
@@ -165,6 +174,9 @@ func _ready():
 	weather.update_weather(self, 0.0)
 	next_dialogue()
 	ui.update_view()
+	if OS.has_feature("web"):
+		web_save_callback = JavaScriptBridge.create_callback(func(_args): save_game())
+		JavaScriptBridge.get_interface("window").bukhankaSave = web_save_callback
 	get_tree().auto_accept_quit = false
 
 func setup_environment():
@@ -194,7 +206,7 @@ func setup_environment():
 	sun.light_color = Color("ffdfac")
 	sun.light_energy = 1.0
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 170
+	sun.directional_shadow_max_distance = 110 if OS.has_feature("web") else 170
 	add_child(sun)
 
 func setup_dust():
@@ -383,7 +395,10 @@ func _process(delta):
 	if view_clock > 0.1:
 		view_clock = 0
 		ui.update_view()
-	lighting.update(self, delta)
+	lighting_timer += delta
+	if lighting_timer >= 0.1:
+		lighting.update(self, lighting_timer)
+		lighting_timer = 0.0
 
 func update_camera(delta: float):
 	var target: Vector3

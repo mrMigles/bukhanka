@@ -3,6 +3,19 @@ $ErrorActionPreference = 'Stop'
 $stagePath = Join-Path $PSScriptRoot 'builds\staging'
 $webPath = Join-Path $PSScriptRoot 'builds\Web'
 New-Item -ItemType Directory -Force $stagePath,$webPath | Out-Null
+function Invoke-Godot([string[]]$GodotArgs, [string]$Stage) {
+    if (-not ($IsWindows -or $PSVersionTable.PSEdition -eq 'Desktop')) {
+        & $Godot @GodotArgs | Out-Host
+        if ($LASTEXITCODE -ne 0) { throw "$Stage failed (exit code $LASTEXITCODE)" }
+        return
+    }
+    $stdout = Join-Path $stagePath 'godot-stdout.log'
+    $stderr = Join-Path $stagePath 'godot-stderr.log'
+    $process = Start-Process -FilePath $Godot -ArgumentList $GodotArgs -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+    Get-Content -LiteralPath $stdout | Out-Host
+    Get-Content -LiteralPath $stderr | Out-Host
+    if ($process.ExitCode -ne 0) { throw "$Stage failed (exit code $($process.ExitCode))" }
+}
 foreach ($file in @('project.godot','main.tscn','icon.svg')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination $stagePath -Force
 }
@@ -17,9 +30,11 @@ foreach ($dir in @('scripts','shaders','assets')) {
         Copy-Item -LiteralPath $sourcePath -Destination $stagePath -Recurse -Force
     }
 }
-& $Godot --headless --path $stagePath --editor --import --quit | Out-Host
-if ($LASTEXITCODE -ne 0) { throw 'Import failed' }
-& $Godot --headless --path $stagePath --export-release Web (Join-Path $webPath 'index.html') | Out-Host
-if ($LASTEXITCODE -ne 0) { throw 'Web export failed' }
+Invoke-Godot @('--headless', '--path', $stagePath, '--editor', '--import', '--quit') 'Import'
+Invoke-Godot @('--headless', '--path', $stagePath, '--export-release', 'Web', (Join-Path $webPath 'index.html')) 'Web export'
+& node (Join-Path $PSScriptRoot 'prepare-web.cjs') $webPath | Out-Host
+if ($LASTEXITCODE -ne 0) { throw 'Web packaging failed' }
+& node (Join-Path $PSScriptRoot 'compress-web.cjs') $webPath | Out-Host
+if ($LASTEXITCODE -ne 0) { throw 'Web compression failed' }
 Write-Host "Web game ready: $webPath"
 

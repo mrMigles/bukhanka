@@ -11,6 +11,9 @@ var freezes = false
 var refresh_clock = 0.0
 var sleep_cover: ColorRect
 var body: PanelContainer
+var sidebar: VBoxContainer
+var content_scroll: ScrollContainer
+var close_button: Button
 var state_text: Label
 var panel_version = ""
 var project_progress: Label
@@ -69,14 +72,14 @@ func _ready():
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.add_theme_font_size_override("font_size", 28)
 	header.add_child(title)
-	button(header, "Закрыть · Esc   ×", close_panel)
+	close_button = button(header, "Закрыть · Esc   ×", close_panel)
 	var divider = HSeparator.new()
 	layout.add_child(divider)
 	var workspace = HBoxContainer.new()
 	workspace.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	workspace.add_theme_constant_override("separation", 24)
 	layout.add_child(workspace)
-	var sidebar = VBoxContainer.new()
+	sidebar = VBoxContainer.new()
 	sidebar.custom_minimum_size.x = 204
 	sidebar.add_theme_constant_override("separation", 10)
 	workspace.add_child(sidebar)
@@ -118,23 +121,47 @@ func _ready():
 		var label = text(line, "", 15)
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		resource_cards.append(label)
-	var scroll = ScrollContainer.new()
-	scroll.name = "PanelScroll"
-	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	right.add_child(scroll)
+	content_scroll = ScrollContainer.new()
+	content_scroll.name = "PanelScroll"
+	content_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	right.add_child(content_scroll)
 	content = VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation", 9)
-	scroll.add_child(content)
+	content_scroll.add_child(content)
 	overlay.hide()
 	sleep_cover = ColorRect.new()
 	sleep_cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	sleep_cover.color = Color(0.02, 0.03, 0.06, 0)
 	sleep_cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(sleep_cover)
+
+func configure_mobile_layout():
+	if not is_instance_valid(game.touch_controls) or not game.touch_controls.enabled: return
+	var view = get_viewport_rect().size
+	var portrait = view.y > view.x
+	var factor = 2.7 if portrait else 1.45
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	overlay.position = Vector2.ZERO
+	overlay.size = view / factor
+	overlay.scale = Vector2.ONE * factor
+	body.offset_left = 10
+	body.offset_right = -10
+	body.offset_top = 10
+	body.offset_bottom = -10
+	sidebar.custom_minimum_size.x = 125 if portrait else 160
+	resource_cards[0].get_parent().get_parent().get_parent().hide()
+	content_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	close_button.text = "×"
+	close_button.custom_minimum_size = Vector2(45, 45)
+	var names = {"camp": "Лагерь", "projects": "Проекты", "crew": "Команда", "upgrades": "Улучшения", "journal": "Дневник", "settings": "Настройки"}
+	for key in nav_buttons:
+		var button_node: Button = nav_buttons[key]
+		button_node.custom_minimum_size.y = 50 if portrait else 58
+		Kit.caption(button_node, names[key])
 
 func style(panel: Control):
 	panel.add_theme_stylebox_override("panel", Kit.box(false, 14))
@@ -219,6 +246,9 @@ func build_panel():
 		content.remove_child(child)
 		child.queue_free()
 	title.text = {"projects": "Передвижная IT-студия", "camp": "Наша стоянка", "crew": "Команда экспедиции", "journal": "Путевой дневник", "upgrades": "Мастерская Буханки", "settings": "Настройки экспедиции", "placement": "Выбор места для лагеря", "editor": "Кто отправится выше облаков?", "rescue": "Помощь из долины", "new": "Новая экспедиция"}.get(section, section)
+	if is_instance_valid(game.touch_controls) and game.touch_controls.enabled:
+		sidebar.visible = section != "editor"
+		title.text = {"editor": "Наша команда", "camp": "Лагерь", "projects": "Проекты", "crew": "Команда", "journal": "Дневник", "upgrades": "Улучшения", "settings": "Настройки"}.get(section, title.text)
 	match section:
 		"projects": build_projects()
 		"camp": screens.build_camp()

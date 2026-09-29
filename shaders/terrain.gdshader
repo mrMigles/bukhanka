@@ -3,6 +3,7 @@ render_mode cull_disabled;
 uniform sampler2D tracks : filter_linear, repeat_disable;
 uniform vec2 track_origin = vec2(-10000.0);
 uniform float wetness = 0.0;
+uniform bool web_lite = false;
 uniform vec3 vehicle = vec3(0.0);
 varying vec3 wp;
 varying vec4 tint;
@@ -11,7 +12,8 @@ float noise(vec2 p) { vec2 i=floor(p),f=fract(p); f=f*f*(3.0-2.0*f); return mix(
 vec4 trail(vec2 p) { vec2 uv=(p-track_origin)/128.0; if(any(lessThan(uv,vec2(0)))||any(greaterThan(uv,vec2(1))))return vec4(0); return texture(tracks,uv); }
 void vertex() { wp=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz; VERTEX.y-=trail(wp.xz).r*0.22; tint=COLOR; }
 void fragment() {
- float grain=noise(wp.xz*14.0), patch=noise(wp.xz*0.55), broad=noise(wp.xz*0.08);
+ float grain=0.5, patch=0.5, broad=noise(wp.xz*0.08);
+ if (!web_lite) { grain=noise(wp.xz*14.0); patch=noise(wp.xz*0.55); }
  float grass=step(tint.r*1.05,tint.g)*step(tint.b,tint.g*0.92);
  float snow=smoothstep(0.63,0.88,min(tint.r,min(tint.g,tint.b)));
  vec4 mark=trail(wp.xz);

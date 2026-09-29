@@ -15,6 +15,8 @@ var next: Button
 var previous: Button
 
 func _ready():
+	var mobile = is_instance_valid(game.touch_controls) and game.touch_controls.enabled
+	var portrait = get_viewport_rect().size.y > get_viewport_rect().size.x
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	theme = Kit.theme()
 	var background = ColorRect.new()
@@ -32,7 +34,7 @@ func _ready():
 	layout.add_theme_constant_override("separation", 14)
 	panel.add_child(layout)
 	heading = label(layout, "", 27)
-	var row = HBoxContainer.new()
+	var row: BoxContainer = VBoxContainer.new() if mobile and portrait else HBoxContainer.new()
 	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", 20)
 	layout.add_child(row)
@@ -74,6 +76,17 @@ func _ready():
 	)
 	hide()
 	viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	if mobile:
+		var factor = 2.4 if portrait else 1.4
+		set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+		size = get_viewport_rect().size / factor
+		scale = Vector2.ONE * factor
+		if portrait:
+			frame.custom_minimum_size = Vector2(220, 115)
+			frame.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+			image_column.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+			scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			viewport.size = Vector2i(320, 180)
 
 func label(parent: Node, text: String, font_size: int) -> Label:
 	var item = Label.new()

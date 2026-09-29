@@ -12,7 +12,7 @@ const STATES = ["Ясно", "Облачно", "Дождь", "Туман", "Яс�
 
 func _ready():
 	rain = CPUParticles3D.new()
-	rain.amount = 700
+	rain.amount = 300 if OS.has_feature("web") else 700
 	rain.lifetime = 1.2
 	rain.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
 	rain.emission_box_extents = Vector3(15, 8, 15)

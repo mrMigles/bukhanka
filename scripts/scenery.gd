@@ -61,6 +61,7 @@ static func forest(w: Node, root: Node3D, index: int, rng: RandomNumberGenerator
 	trees.multimesh.mesh = w.tree_mesh
 	trees.multimesh.instance_count = transforms.size()
 	for i in range(transforms.size()): trees.multimesh.set_instance_transform(i, transforms[i])
+	trees.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(trees)
 	root.set_meta("forest", true)
 

@@ -101,6 +101,7 @@ func _ready():
 	build_menu()
 	build_garage()
 	build_pause()
+	get_viewport().size_changed.connect(layout_mobile_panels)
 func build_menu():
 	menu = panel(self, Rect2(58, 136, 530, 584), Color(0.055, 0.12, 0.12, 0.95), 5)
 	label(menu, "АЛТАЙ  /  ЭКСПЕДИЦИЯ 4×4", Vector2(32, 25), 15, accent)
@@ -212,15 +213,25 @@ func draw_equipment(art: Control, kind: int):
 func apply_mobile_layout():
 	mobile_layout = true
 	menu_caption.text = "Джойстик — ехать  /  Проведите по миру — обзор"
-	for child in hud.get_children():
-		if child is Button or child.position.y > 700: child.hide()
+	for child in hud.get_children(): child.hide()
 	speed_label.get_parent().show()
-	speed_label.get_parent().position = Vector2(28, 130)
-	speed_label.get_parent().scale = Vector2(0.8, 0.8)
-	speaker.get_parent().show()
-	speaker.get_parent().position = Vector2(340, 754)
-	speaker.get_parent().scale = Vector2(0.95, 0.8)
+	speed_label.get_parent().position = Vector2(30, 205)
+	speed_label.get_parent().scale = Vector2(1.7, 1.7)
 	mini.hide()
+	layout_mobile_panels()
+	game.touch_controls.configure_mobile_layout()
+	game.rpg_ui.configure_mobile_layout()
+
+func layout_mobile_panels():
+	if not mobile_layout: return
+	var view = get_viewport_rect().size
+	var portrait = view.y > view.x
+	var menu_factor = 2.5 if portrait else 1.35
+	menu.scale = Vector2.ONE * menu_factor
+	menu.position = Vector2((view.x - 530 * menu_factor) * 0.5, 100 if portrait else maxf(20, (view.y - 584 * menu_factor) * 0.5))
+	var pause_factor = 2.4 if portrait else 1.45
+	pause_panel.scale = Vector2.ONE * pause_factor
+	pause_panel.position = (view - Vector2(500, 410) * pause_factor) * 0.5
 
 func draw_map():
 	mini.draw_circle(Vector2(102, 102), 100, Color(0.06, 0.16, 0.16, 0.93))

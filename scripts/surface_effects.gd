@@ -9,6 +9,7 @@ var ring_heights = PackedFloat32Array()
 var ring_cursor = 0
 var ring_clock = 0.0
 var stamp_clock = 0.0
+var tracks_dirty = false
 var coating = 0.0
 var splashes: Array[CPUParticles3D] = []
 var mud_parts: Array[MeshInstance3D] = []
@@ -74,6 +75,7 @@ func stamp(p: Vector3, strength: float):
 			var pixel = k - Vector2i(origin * 2)
 			if pixel.x >= 0 and pixel.y >= 0 and pixel.x < 256 and pixel.y < 256:
 				terrain_image.set_pixel(pixel.x, pixel.y, Color(value, 0, 0, 1))
+				tracks_dirty = true
 
 func update_surface(delta: float):
 	var p = game.van.position
@@ -86,6 +88,7 @@ func update_surface(delta: float):
 			if pixel.x >= 0 and pixel.y >= 0 and pixel.x < 256 and pixel.y < 256:
 				terrain_image.set_pixel(pixel.x, pixel.y, Color(cells[key], 0, 0, 1))
 		texture.update(terrain_image)
+		tracks_dirty = false
 		game.world.terrain_material.set_shader_parameter("track_origin", origin)
 		game.world.road_material.set_shader_parameter("track_origin", origin)
 	var water = game.world.sample_water(p).depth > 0.1
@@ -113,7 +116,9 @@ func update_surface(delta: float):
 		elif not moving: previous_contacts[i] = Vector3.INF
 	if stamp_clock > 0.10:
 		stamp_clock = 0
-		texture.update(terrain_image)
+		if tracks_dirty:
+			texture.update(terrain_image)
+			tracks_dirty = false
 		if cells.size() > 24000:
 			var keys = cells.keys()
 			for i in range(4000): cells.erase(keys[i])

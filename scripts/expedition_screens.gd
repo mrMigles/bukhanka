@@ -197,6 +197,7 @@ func build_editor():
 	ui.content.add_child(footer)
 	var hint = ui.text(footer, "Повторяющиеся роли разрешены. Внешность можно изменить только перед стартом.", 14)
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if is_instance_valid(g.touch_controls) and g.touch_controls.enabled: hint.hide()
 	var start = ui.button(footer, "Отправиться в путь   ›", func():
 		for hero in g.model.crew:
 			if str(hero.name).is_empty(): hero.name = "Друг"
@@ -206,6 +207,9 @@ func build_editor():
 		g.start_trip()
 	)
 	start.custom_minimum_size = Vector2(255, 52)
+	if is_instance_valid(g.touch_controls) and g.touch_controls.enabled:
+		start.custom_minimum_size.x = 0
+		start.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	start.name = "StartExpedition"
 	start.add_theme_stylebox_override("normal", Kit.box(true))
 
@@ -361,6 +365,9 @@ func build_settings():
 	var g = ui.game
 	var card = Kit.card(ui.content)
 	ui.text(card, "Звук и путешествие", 23)
+	if OS.has_feature("web"):
+		ui.text(card, "Веб-версия %s" % str(JavaScriptBridge.eval("window.BUKHANKA_BUILD || 'неизвестна'")), 14)
+		ui.button(card, "Проверить обновление", func(): JavaScriptBridge.eval("window.bukhankaCheckUpdate && window.bukhankaCheckUpdate()"))
 	var voices = CheckButton.new()
 	voices.text = "Голоса друзей"
 	voices.button_pressed = g.model.voices_enabled

@@ -32,11 +32,13 @@ func _ready():
 	noise.frequency = 0.006
 	noise.fractal_octaves = 4
 	terrain_material.shader = load("res://shaders/terrain.gdshader")
+	terrain_material.set_shader_parameter("web_lite", OS.has_feature("web"))
 	grass_material.shader = load("res://shaders/grass.gdshader")
 	water_material.shader = load("res://shaders/river.gdshader")
 	lake_material.shader = load("res://shaders/lake.gdshader")
 	water_materials = [water_material, lake_material]
 	road_material.shader = load("res://shaders/gravel.gdshader")
+	road_material.set_shader_parameter("web_lite", OS.has_feature("web"))
 	wood = material(Color("82705b"))
 	marker = material(Color("e7d8ad"))
 	rock_mesh = SphereMesh.new()
@@ -224,9 +226,14 @@ func update_chunks(z: float, immediate = false):
 			chunks[key].queue_free()
 			chunks.erase(key)
 			obstacles.erase(key)
-	for i in range(center - 3, center + 10):
+	if building_chunk and not immediate: return
+	# Fill the road around the player first; distant scenery can arrive later.
+	var order: Array[int] = [center]
+	for distance in range(1, 10):
+		if center + distance <= center + 9: order.append(center + distance)
+		if center - distance >= center - 3: order.append(center - distance)
+	for i in order:
 		if not chunks.has(i):
-			if building_chunk and not immediate: return
 			build_chunk(i, immediate)
 			if not immediate:
 				break
@@ -252,6 +259,9 @@ func build_chunk(index: int, immediate: bool = true):
 	lakes.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var wet_counts = Vector2i.ZERO
 	var batch_start = Time.get_ticks_usec()
+	var columns = terrain_columns(start)
+	var heights: Array[float] = []
+	for x in columns: heights.append(ground(x, start))
 	for iz in range(int(LENGTH / STEP)):
 		if not immediate and Time.get_ticks_usec() - batch_start > 1800:
 			await get_tree().process_frame
@@ -260,17 +270,18 @@ func build_chunk(index: int, immediate: bool = true):
 				return
 			batch_start = Time.get_ticks_usec()
 		var z = start + iz * STEP
-		var columns = terrain_columns(z)
 		var next_columns = terrain_columns(z + STEP)
+		var next_heights: Array[float] = []
+		for x in next_columns: next_heights.append(ground(x, z + STEP))
 		for ix in range(columns.size() - 1):
 			var x: float = columns[ix]
 			var width: float = columns[ix + 1] - x
-			var a = Vector3(x, ground(x, z), z)
-			var b = Vector3(x + width, ground(x + width, z), z)
+			var a = Vector3(x, heights[ix], z)
+			var b = Vector3(x + width, heights[ix + 1], z)
 			var nx: float = next_columns[ix]
 			var nx1: float = next_columns[ix + 1]
-			var c = Vector3(nx1, ground(nx1, z + STEP), z + STEP)
-			var d = Vector3(nx, ground(nx, z + STEP), z + STEP)
+			var c = Vector3(nx1, next_heights[ix + 1], z + STEP)
+			var d = Vector3(nx, next_heights[ix], z + STEP)
 			wet_counts += water_system.add_terrain_water(river, lakes, [a, b, c])
 			wet_counts += water_system.add_terrain_water(river, lakes, [a, c, d])
 			var altitude = (a.y + b.y + c.y + d.y) * 0.25
@@ -296,6 +307,8 @@ func build_chunk(index: int, immediate: bool = true):
 				quad(road_surface, a, b, c, d, col)
 				has_road = true
 			else: quad(st, a, b, c, d, col)
+		columns = next_columns
+		heights = next_heights
 	finish(st, root, terrain_material)
 	if has_road: finish(road_surface, root, road_material)
 	if wet_counts.x > 0:
@@ -327,6 +340,7 @@ func build_chunk(index: int, immediate: bool = true):
 	trees.multimesh.instance_count = transforms.size()
 	for i in transforms.size():
 		trees.multimesh.set_instance_transform(i, transforms[i])
+	trees.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(trees)
 	for j in range(16):
 		var z = rng.randf_range(start, start + LENGTH)
@@ -482,7 +496,7 @@ func animate_wildlife(player: Vector3, time: float, delta: float):
 			leg.rotation.x = sin(time * (12 if alarm else 5) + leg.position.x * 10 + leg.position.z * 8) * (0.35 if walking else 0.0)
 
 func safe_camera(look: Vector3, target: Vector3) -> Vector3:
-	var steps = maxi(12, int(look.distance_to(target) * 3))
+	var steps = maxi(12, int(ceil(look.distance_to(target))))
 	for i in range(2, steps + 1):
 		var t = float(i) / steps
 		var point = look.lerp(target, t)
