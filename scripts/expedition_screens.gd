@@ -15,6 +15,7 @@ var dirty = false
 var dragging = false
 var place_button: Button
 var assessment_label: Label
+var mobile = preload("res://scripts/mobile_screens.gd").new()
 
 func reset_bindings():
 	bindings.clear()
@@ -25,6 +26,7 @@ func close_preview():
 	ghost = null
 	if is_instance_valid(preview): preview.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	dragging = false
+	dirty = false
 
 func live_label(parent: Node, getter: Callable, size: int = 17) -> Label:
 	var label = ui.text(parent, str(getter.call()), size)
@@ -68,6 +70,7 @@ func action_card(parent: Node, icon: String, title: String, description: String,
 	ui.button(card, "Открыть   ›", action)
 
 func build_camp():
+	if ui.is_mobile(): mobile.setup(self); mobile.build_camp(); return
 	var g = ui.game
 	project_card(ui.content)
 	ui.text(ui.content, "Управление лагерем", 21)
@@ -122,6 +125,7 @@ func build_shop():
 	ui.button(ui.content, "Вернуться в лагерь", func(): ui.open_panel("camp"))
 
 func build_crew():
+	if ui.is_mobile(): mobile.setup(self); mobile.build_crew(); return
 	var g = ui.game
 	var top = live_label(ui.content, func():
 		var mood = 0.0
@@ -155,6 +159,7 @@ func build_crew():
 			card.add_child(choose)
 
 func build_editor():
+	if ui.is_mobile(): mobile.setup(self); mobile.build_editor(); return
 	var g = ui.game
 	ui.text(ui.content, "Соберите свою четвёрку или оставьте готовую команду. Модель сразу показывает выбранные цвета и головной убор.", 15)
 	var strip = ScrollContainer.new()
@@ -277,6 +282,7 @@ func rebuild_person_preview(viewport: SubViewport, hero: Dictionary):
 	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 func build_upgrades():
+	if ui.is_mobile(): mobile.setup(self); mobile.build_upgrades(); return
 	var g = ui.game
 	var categories = ui.row()
 	for i in range(4):
@@ -367,6 +373,7 @@ func van_preview(parent: Node):
 	preview_camera.fov = 40
 
 func build_settings():
+	if ui.is_mobile(): mobile.setup(self); mobile.build_settings(); return
 	var g = ui.game
 	var graphics_card = Kit.card(ui.content)
 	ui.text(graphics_card, "Графика", 23)
@@ -430,6 +437,7 @@ func build_settings():
 	ui.text(card, "Джойстик — газ и руль. Проведите по миру для обзора. 4H/4L — пониженная. Камера и дополнительные действия — справа внизу." if is_instance_valid(g.touch_controls) and g.touch_controls.enabled else "WASD — ехать · ПКМ — обзор · C — камера\nE — место лагеря · B — стоянка · P — проекты\nL — пониженная · F — лебёдка · J — автопилот\nU — мастерская · O — фоторежим · Esc — закрыть", 16)
 
 func build_journal():
+	if ui.is_mobile(): mobile.setup(self); mobile.build_journal(); return
 	var g = ui.game
 	ui.text(ui.content, "Куда отправимся дальше?", 25)
 	ui.text(ui.content, "Выберите цель на маршруте. У воды можно пополнить запасы, в деревне — купить припасы и зарядиться.", 16)
@@ -489,12 +497,21 @@ func build_placement():
 	candidate = site.get("position", g.van.position + Vector3(10, 0, 0))
 	angle = g.camp_controller.rotation
 	var columns = ui.row()
-	var view = Kit.card(columns)
-	ui.text(view, "Площадка у маршрута", 21)
+	var mobile_layout = ui.is_mobile()
+	if mobile_layout:
+		ui.content.remove_child(columns)
+		columns.queue_free()
+	var view = ui.content if mobile_layout else Kit.card(columns)
+	if not mobile_layout: ui.text(view, "Площадка у маршрута", 21)
 	var container = SubViewportContainer.new()
 	var mobile = is_instance_valid(g.touch_controls) and g.touch_controls.enabled
-	container.custom_minimum_size = Vector2(0, 190) if mobile else Vector2(420, 360)
+	container.custom_minimum_size = Vector2(0, 84) if mobile else Vector2(420, 360)
 	container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if mobile:
+		container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		ui.content_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	container.set_meta("drag_surface", true)
+	container.name = "CampMap"
 	container.stretch = true
 	view.add_child(container)
 	preview = SubViewport.new()
@@ -504,7 +521,7 @@ func build_placement():
 	preview_camera = Camera3D.new()
 	preview.add_child(preview_camera)
 	preview_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	preview_camera.size = 48
+	preview_camera.size = 28 if mobile and not ui.mobile_portrait else 48
 	preview_camera.position = g.van.position + Vector3(18, 36, 24)
 	preview_camera.look_at(g.van.position)
 	container.gui_input.connect(func(event):
@@ -520,15 +537,19 @@ func build_placement():
 			candidate += (right * event.relative.x - forward * event.relative.y) * 48.0 / maxf(1, container.size.x)
 			dirty = true
 	)
-	ui.text(view, "Двигайте площадку пальцем. Поворот — кнопкой ниже.\nЗелёная сетка: можно поставить лагерь." if mobile else "Перетаскивайте площадку мышью. Колесо — поворот.\nЗелёная сетка: можно поставить. Красная: найдите другое место.", 14)
-	var stats = Kit.card(columns, 0 if mobile else 260)
-	ui.text(stats, "Оценка места", 23)
-	for entry in [["Ровность", "flatness"], ["Укрытие рельефом", "shelter"], ["Солнечный свет", "sun"], ["Близость к воде", "water"], ["Подъезд", "access"]]:
-		var key = str(entry[1])
-		live_meter(stats, func(): return assessment.get(key, 0), entry[0])
-	assessment_label = ui.text(stats, "", 16)
-	var actions = ui.row()
-	place_button = ui.button(actions, "Поставить лагерь", func():
+	if not mobile: ui.text(view, "Перетаскивайте площадку мышью. Колесо — поворот.\nЗелёная сетка: можно поставить. Красная: найдите другое место.", 14)
+	var stats = ui.sticky_footer if mobile else Kit.card(columns, 260)
+	if not mobile:
+		ui.text(stats, "Оценка места", 23)
+		for entry in [["Ровность", "flatness"], ["Укрытие рельефом", "shelter"], ["Солнечный свет", "sun"], ["Близость к воде", "water"], ["Подъезд", "access"]]:
+			var key = str(entry[1])
+			live_meter(stats, func(): return assessment.get(key, 0), entry[0])
+	assessment_label = ui.text(stats, "", 12 if mobile else 16)
+	var actions = HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 6)
+	(ui.sticky_footer if mobile else ui.content).add_child(actions)
+	var primary_parent = ui.sticky_footer if mobile and ui.mobile_portrait else actions
+	place_button = ui.button(primary_parent, "Поставить лагерь", func():
 		assess()
 		if not assessment.valid: return
 		g.camp_controller.selected = assessment.duplicate()
@@ -536,13 +557,16 @@ func build_placement():
 		g.toggle_camp()
 		if g.camping: ui.close_panel()
 	)
-	ui.button(actions, "Повернуть на 90°", func(): angle += PI / 2; dirty = true)
-	ui.button(actions, "Авторазмещение", func():
+	place_button.name = "PlaceCamp"
+	place_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if mobile and ui.mobile_portrait: ui.sticky_footer.move_child(place_button, 1)
+	ui.button(actions, "Повернуть" if mobile else "Повернуть на 90°", func(): angle += PI / 2; dirty = true).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ui.button(actions, "Найти место" if mobile else "Авторазмещение", func():
 		var best = g.camp_controller.find_site(g, g.van.position)
 		if not best.is_empty(): candidate = best.position
 		dirty = true
-	)
-	ui.button(actions, "Отмена", ui.close_panel)
+	).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if not mobile: ui.button(actions, "Отмена", ui.close_panel)
 	assess()
 
 func assess():
@@ -552,9 +576,12 @@ func assess():
 	candidate = assessment.position
 	place_button.disabled = not assessment.valid
 	assessment_label.text = "+%.0f%% к работе\n+%.0f%% к восстановлению\n\n%s" % [assessment.work_bonus * 100, assessment.rest_bonus * 100, "Сухая площадка в пределах 36 м от машины." if assessment.valid else "Есть вода, препятствия, крутой склон или машина слишком далеко."]
+	if ui.is_mobile():
+		assessment_label.text = ("Можно ставить · работа +%.0f%% · отдых +%.0f%%" % [assessment.work_bonus * 100, assessment.rest_bonus * 100] if assessment.valid else "Нужна ровная сухая площадка рядом с машиной") + "\nДвигайте сетку пальцем или нажмите «Найти место»"
 	if is_instance_valid(preview): preview.render_target_update_mode = SubViewport.UPDATE_ONCE
 	if is_instance_valid(ghost): ghost.queue_free()
 	ghost = MeshInstance3D.new()
+	ghost.name = "CampPlacementGhost"
 	var mesh = ImmediateMesh.new()
 	var material = StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED

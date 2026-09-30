@@ -69,8 +69,10 @@ func run():
 	check(not g.camping and not g.packing_camp, "Crew boards and camp packs within two seconds")
 	g.effects.update_surface(0.1)
 	var p = g.van.position
+	var height_before_track = g.world.contact_ground(p.x, p.z)
 	g.effects.stamp(p, 1)
 	check(g.effects.depth_at(p.x, p.z) > 0.03, "Tires deform contact terrain")
+	check(g.world.contact_ground(p.x, p.z) < height_before_track, "Cached terrain keeps tire deformation live")
 	check(g.effects.cells.size() > 0, "Tracks persist in bounded world cells")
 	var test_touch = InputEventScreenTouch.new()
 	g.touch_controls.enabled = true

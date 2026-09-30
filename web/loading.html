@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#102d30">
+  <title>Буханка • Выше облаков</title>
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="manifest" href="index.manifest.json">
+  <link rel="preload" as="image" href="poster-__BUILD_VERSION__.webp">
+  <style>__LOADING_STYLE__</style>
+</head>
+<body>
+  <canvas id="canvas" tabindex="0" aria-label="Буханка • Выше облаков"></canvas>
+  <main id="status" aria-label="Загрузка игры">
+    <img class="poster" src="poster-__BUILD_VERSION__.webp" alt="Буханка на горной дороге над облаками" fetchpriority="high">
+    <header class="brand"><span class="eyebrow">ГОРНОЕ ПУТЕШЕСТВИЕ</span><h1>БУХАНКА</h1><p>Выше облаков</p></header>
+    <section class="loading-card">
+      <div class="status-line"><span class="trail-icon" aria-hidden="true">△</span><h2 id="status-title">Готовим путешествие</h2></div>
+      <p id="status-description">Пожалуйста, подождите. Скоро отправимся в горы.</p>
+      <progress id="status-progress" max="100" aria-label="Загрузка игры"></progress>
+      <div class="loading-meta"><span id="status-stage" role="status" aria-live="polite">Подключаем игру…</span><span id="status-elapsed">0 с</span></div>
+      <div id="status-actions" hidden><button id="retry" type="button">Повторить загрузку</button><button id="safe-start" type="button">Лёгкий запуск</button></div>
+      <details id="status-details" hidden><summary>Информация для поддержки</summary><pre id="status-error"></pre></details>
+      <span class="build">Версия __BUILD_VERSION__</span>
+    </section>
+  </main>
+  <noscript>Для игры нужно включить JavaScript в браузере.</noscript>
+  <script>window.BUKHANKA_CONFIG = __GODOT_CONFIG__;</script>
+  <script defer src="loading-__BUILD_VERSION__.js"></script>
+  <script defer src="pwa-update-__BUILD_VERSION__.js"></script>
+</body>
+</html>

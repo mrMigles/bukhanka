@@ -50,6 +50,16 @@ jobs:
           "$GODOT" --headless --path . --script res://tests/expedition.gd -- --test-mode
           "$GODOT" --headless --path . --script res://tests/graphics.gd -- --test-mode
           "$GODOT" --headless --path . --script res://tests/mobile_camera.gd -- --test-mode
+      - name: Verify compressed delivery behind Caddy/Portainer
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --detach --rm --name bukhanka-delivery -p 127.0.0.1:8091:80 \
+            -v "$GITHUB_WORKSPACE/builds/Web:/usr/share/nginx/html:ro" \
+            -v "$GITHUB_WORKSPACE/deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro" nginx:stable-alpine
+          trap 'docker stop bukhanka-delivery >/dev/null' EXIT
+          curl --fail --silent --retry 10 --retry-connrefused --retry-delay 1 http://127.0.0.1:8091/version.json >/dev/null
+          node tests/web-delivery.cjs http://127.0.0.1:8091
       - uses: actions/upload-artifact@v4
         with:
           name: bukhanka-web

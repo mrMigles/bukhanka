@@ -24,7 +24,9 @@ func load_preferences(test_mode: bool):
 		scale = 0.75
 	path = "user://test_graphics.cfg" if test_mode else "user://graphics.cfg"
 	var config = ConfigFile.new()
-	if config.load(path) != OK: return
+	if config.load(path) != OK:
+		apply_web_recovery_profile()
+		return
 	preset = str(config.get_value("graphics", "preset", "auto"))
 	if preset not in PRESETS: preset = "auto"
 	shadows = bool(config.get_value("graphics", "shadows", preset != "low" and not mobile_device))
@@ -35,6 +37,14 @@ func load_preferences(test_mode: bool):
 	if mobile_device and preset == "auto":
 		shadows = false
 		scale = 0.75
+	apply_web_recovery_profile()
+
+func apply_web_recovery_profile():
+	# A one-launch recovery option; never overwrite the stored quality preference.
+	if OS.has_feature("web") and bool(JavaScriptBridge.eval("new URLSearchParams(location.search).get('safe_mode') === '1'", true)):
+		preset = "low"
+		shadows = false
+		scale = 0.65
 
 func save_preferences():
 	var config = ConfigFile.new()

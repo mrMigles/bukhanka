@@ -2,7 +2,7 @@ const VERSION = '__BUILD_VERSION__';
 const CACHE_PREFIX = 'bukhanka-web-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const LEGACY_PREFIX = 'Буханка • Выше о-sw-cache-';
-const SHELL = ['index.html', 'pwa-update-__BUILD_VERSION__.js', 'index.manifest.json', 'icon-192.png', 'icon-512.png'];
+const SHELL = ['index.html', 'loading-__BUILD_VERSION__.js', 'poster-__BUILD_VERSION__.webp', 'pwa-update-__BUILD_VERSION__.js', 'index.manifest.json', 'icon-192.png', 'icon-512.png'];
 const GAME = ['game-__BUILD_VERSION__.js', 'game-__BUILD_VERSION__.wasm', 'game-__BUILD_VERSION__.pck', 'game-__BUILD_VERSION__.audio.worklet.js', 'game-__BUILD_VERSION__.audio.position.worklet.js'];
 const CACHEABLE = new Set([...SHELL, ...GAME]);
 
@@ -51,9 +51,7 @@ self.addEventListener('fetch', event => {
     }
     try {
       const response = await fetch(event.request, navigation ? { cache: 'no-store' } : undefined);
-      if (response.ok) {
-        await cache.put(navigation ? new URL('index.html', self.registration.scope) : event.request, response.clone());
-      }
+      if (response.ok) event.waitUntil(cache.put(navigation ? new URL('index.html', self.registration.scope) : event.request, response.clone()).catch(() => {}));
       return response;
     } catch (error) {
       const fallback = await cache.match(navigation ? new URL('index.html', self.registration.scope) : event.request);

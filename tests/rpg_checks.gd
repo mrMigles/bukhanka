@@ -218,12 +218,12 @@ static func run(g: Node, check: Callable):
 	g.rpg_ui.open_panel("editor")
 	await g.get_tree().process_frame
 	await g.get_tree().process_frame
-	var start_button = g.rpg_ui.content.find_child("StartExpedition", true, false)
+	var start_button = g.rpg_ui.body.find_child("StartExpedition", true, false)
 	var previews = g.rpg_ui.content.find_children("*", "SubViewport", true, false)
 	var isolated = true
 	for viewport in previews: isolated = isolated and viewport.find_world_3d() != g.get_world_3d()
 	check.call(isolated, "UI: portrait lights belong to isolated worlds and cannot overexpose the landscape")
-	check.call(previews.size() == 4 and is_instance_valid(start_button) and start_button.get_global_rect().end.y <= g.get_viewport().get_visible_rect().size.y, "UI: editor keeps four low-poly previews and its start action on screen")
+	check.call((previews.size() <= 1 if g.rpg_ui.is_mobile() else previews.size() == 4) and is_instance_valid(start_button) and start_button.get_global_rect().end.y <= g.get_viewport().get_visible_rect().size.y, "UI: editor limits phone previews and keeps its start action on screen")
 	g.rpg_ui.close_panel()
 	g.paused = true
 	for screen in ["camp", "crew", "projects", "upgrades", "placement", "journal", "settings"]:

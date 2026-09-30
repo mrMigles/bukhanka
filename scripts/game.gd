@@ -183,6 +183,8 @@ func _ready():
 		web_save_callback = JavaScriptBridge.create_callback(func(_args): save_game())
 		JavaScriptBridge.get_interface("window").bukhankaSave = web_save_callback
 	get_tree().auto_accept_quit = false
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("window.bukhankaGameReady = true; window.dispatchEvent(new Event('bukhanka-ready'));", true)
 
 func setup_environment():
 	var we = WorldEnvironment.new()

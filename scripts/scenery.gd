@@ -1,7 +1,10 @@
 extends RefCounted
 
-static func populate(w: Node, root: Node3D, index: int, rng: RandomNumberGenerator):
+static func populate(w: Node, root: Node3D, index: int, rng: RandomNumberGenerator, immediate: bool = true):
 	for item in w.director.for_chunk(index):
+		if not immediate:
+			await w.get_tree().process_frame
+			if not is_instance_valid(root) or root.is_queued_for_deletion(): return
 		match item.kind:
 			"manul":
 				var p = Vector3(item.x, w.drive_height(item.x, item.z), item.z)
@@ -21,8 +24,14 @@ static func populate(w: Node, root: Node3D, index: int, rng: RandomNumberGenerat
 			"lake": root.set_meta("lake", true)
 			"food": food_cluster(w, root, item, item.get("apple", false))
 			"tunnel": tunnel(w, root, item)
-	grass(w, root, index, rng)
-	forest(w, root, index, rng)
+	if immediate:
+		grass(w, root, index, rng)
+		forest(w, root, index, rng)
+	else:
+		await grass(w, root, index, rng, false)
+		if not is_instance_valid(root) or root.is_queued_for_deletion(): return
+		await forest(w, root, index, rng, false)
+		if not is_instance_valid(root) or root.is_queued_for_deletion(): return
 	if posmod(index, 5) == 1:
 		for i in range(3):
 			var bird = Node3D.new()
@@ -37,11 +46,16 @@ static func populate(w: Node, root: Node3D, index: int, rng: RandomNumberGenerat
 				wing.rotation.y = side * 0.2
 			w.birds.append(bird)
 
-static func forest(w: Node, root: Node3D, index: int, rng: RandomNumberGenerator):
+static func forest(w: Node, root: Node3D, index: int, rng: RandomNumberGenerator, immediate: bool = true):
 	var start = index * w.LENGTH
 	if maxf(w.director.forest_density(start), maxf(w.director.forest_density(start + 72), w.director.forest_density(start + 144))) <= 0: return
 	var transforms: Array[Transform3D] = []
+	var batch_start = Time.get_ticks_usec()
 	for attempt in range(180):
+		if not immediate and Time.get_ticks_usec() - batch_start > 1800:
+			await w.get_tree().process_frame
+			if not is_instance_valid(root) or root.is_queued_for_deletion(): return
+			batch_start = Time.get_ticks_usec()
 		var z = rng.randf_range(start, start + w.LENGTH)
 		if rng.randf() > w.director.forest_density(z): continue
 		var x = w.road_x(z) + (-1 if attempt % 2 == 0 else 1) * rng.randf_range(7.5, 38)
@@ -253,7 +267,7 @@ static func waterfall(w: Node, root: Node3D, z: float):
 	root.add_child(foam)
 	w.waterfall_emitters.append(foam)
 	root.set_meta("waterfall",true)
-static func grass(w: Node, root: Node3D, index: int, rng: RandomNumberGenerator):
+static func grass(w: Node, root: Node3D, index: int, rng: RandomNumberGenerator, immediate: bool = true):
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for i in range(3):
@@ -261,7 +275,12 @@ static func grass(w: Node, root: Node3D, index: int, rng: RandomNumberGenerator)
 		w.triangle(st, Vector3(cos(a) * 0.16, 0, sin(a) * 0.16), Vector3(-cos(a) * 0.16, 0, -sin(a) * 0.16), Vector3(0.12, 0.62, 0), Color.WHITE)
 	var mesh = st.commit()
 	var transforms: Array[Transform3D] = []
+	var batch_start = Time.get_ticks_usec()
 	for i in range(200):
+		if not immediate and Time.get_ticks_usec() - batch_start > 1800:
+			await w.get_tree().process_frame
+			if not is_instance_valid(root) or root.is_queued_for_deletion(): return
+			batch_start = Time.get_ticks_usec()
 		var z = index * w.LENGTH + rng.randf() * w.LENGTH
 		var x = w.route_x(z, i % 4) + rng.randf_range(-15, 15)
 		var route = w.nearest_route(x, z)

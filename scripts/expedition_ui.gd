@@ -14,8 +14,18 @@ var body: PanelContainer
 var sidebar: VBoxContainer
 var panel_layout: VBoxContainer
 var mobile_portrait = false
-var mobile_navigation: HFlowContainer
+var mobile_navigation: HBoxContainer
 var content_scroll: ScrollContainer
+var sticky_footer: VBoxContainer
+var sticky_toolbar: VBoxContainer
+var scroll_touch = -1
+var scroll_origin = Vector2.ZERO
+var scroll_last = Vector2.ZERO
+var scroll_target: ScrollContainer
+var scroll_dragging = false
+var scroll_button: BaseButton
+var scroll_slider: HSlider
+var slider_start_value = 0.0
 var close_button: Button
 var state_text: Label
 var panel_version = ""
@@ -125,6 +135,10 @@ func _ready():
 		var label = text(line, "", 15)
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		resource_cards.append(label)
+	sticky_toolbar = VBoxContainer.new()
+	sticky_toolbar.add_theme_constant_override("separation", 6)
+	right.add_child(sticky_toolbar)
+	sticky_toolbar.hide()
 	content_scroll = ScrollContainer.new()
 	content_scroll.name = "PanelScroll"
 	content_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -136,6 +150,10 @@ func _ready():
 	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation", 9)
 	content_scroll.add_child(content)
+	sticky_footer = VBoxContainer.new()
+	sticky_footer.add_theme_constant_override("separation", 6)
+	right.add_child(sticky_footer)
+	sticky_footer.hide()
 	overlay.hide()
 	sleep_cover = ColorRect.new()
 	sleep_cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -154,35 +172,42 @@ func configure_mobile_layout():
 	overlay.position = Vector2.ZERO
 	overlay.size = view / factor
 	overlay.scale = Vector2.ONE * factor
-	body.offset_left = 10
-	body.offset_right = -10
-	body.offset_top = 10
-	body.offset_bottom = -10
+	var safe = game.touch_controls.safe_area
+	body.offset_left = 8 + safe.x
+	body.offset_right = -8 - safe.z
+	body.offset_top = 8 + safe.y
+	body.offset_bottom = -8 - safe.w
+	body.add_theme_stylebox_override("panel", Kit.box(false, 8))
+	panel_layout.add_theme_constant_override("separation", 6)
+	theme.default_font_size = 14
+	for type in ["Button", "OptionButton"]:
+		for state in ["normal", "hover", "pressed", "focus", "disabled"]:
+			theme.set_stylebox(state, type, Kit.box(state in ["hover", "pressed", "focus"], 6))
 	sidebar.custom_minimum_size.x = 144
 	resource_cards[0].get_parent().get_parent().get_parent().hide()
-	content_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED if portrait else ScrollContainer.SCROLL_MODE_AUTO
+	content_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	close_button.text = "×"
 	close_button.custom_minimum_size = Vector2(45, 45)
-	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_font_size_override("font_size", 19)
 	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	info.add_theme_font_size_override("font_size", 12)
 	panel_layout.get_child(0).add_theme_constant_override("separation", 10)
-	panel_layout.get_child(0).get_child(0).custom_minimum_size = Vector2(32, 32)
+	panel_layout.get_child(0).get_child(0).custom_minimum_size = Vector2(24, 24)
+	panel_layout.get_child(1).hide()
 	if not is_instance_valid(mobile_navigation):
-		mobile_navigation = HFlowContainer.new()
-		mobile_navigation.add_theme_constant_override("h_separation", 4)
-		mobile_navigation.add_theme_constant_override("v_separation", 4)
+		mobile_navigation = HBoxContainer.new()
+		mobile_navigation.add_theme_constant_override("separation", 2)
 		panel_layout.add_child(mobile_navigation)
-		panel_layout.move_child(mobile_navigation, 2)
-	var names = {"camp": "Лагерь", "projects": "Проекты", "crew": "Команда", "upgrades": "Машина", "journal": "Дневник", "settings": "Настройки"}
+	var names = {"camp": "Лагерь", "projects": "Проекты", "crew": "Команда", "upgrades": "Машина", "journal": "Дневник", "settings": "Опции"}
 	for key in nav_buttons:
 		var button_node: Button = nav_buttons[key]
 		var parent: Node = mobile_navigation
 		if button_node.get_parent() != parent:
 			button_node.get_parent().remove_child(button_node)
 			parent.add_child(button_node)
-		var columns = 3 if portrait else 6
-		button_node.custom_minimum_size = Vector2(floorf((view.x / factor - 48 - (columns - 1) * 4) / columns), 56)
+		button_node.custom_minimum_size = Vector2(44, 48)
+		button_node.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button_node.tooltip_text = "Настройки" if key == "settings" else names[key]
 		Kit.caption(button_node, names[key])
 		var symbol: TextureRect = button_node.get_meta("symbol")
 		symbol.show()
@@ -191,20 +216,101 @@ func configure_mobile_layout():
 		line.vertical = true
 		line.add_theme_constant_override("separation", 2)
 		var margin = line.get_parent().get_parent()
-		margin.add_theme_constant_override("margin_left", 6)
-		margin.add_theme_constant_override("margin_right", 6)
-		button_node.get_meta("caption").add_theme_font_size_override("font_size", 11)
+		margin.add_theme_constant_override("margin_left", 0)
+		margin.add_theme_constant_override("margin_right", 0)
+		button_node.get_meta("caption").add_theme_font_size_override("font_size", 9)
 	sidebar.hide()
 	mobile_navigation.visible = section != "editor"
 	if not section.is_empty(): build_panel()
 
 func style(panel: Control):
 	panel.add_theme_stylebox_override("panel", Kit.box(false, 14))
+func is_mobile() -> bool:
+	return is_instance_valid(game.touch_controls) and game.touch_controls.enabled
+
+# Handle vertical gestures before child buttons/sliders consume them. A tap keeps
+# its normal action; a swipe cancels that action and scrolls the enclosing list.
+func _input(event: InputEvent):
+	if not is_mobile() or not overlay.visible: return
+	if event is InputEventScreenTouch:
+		if event.pressed and scroll_touch == -1:
+			scroll_origin = event.position
+			scroll_last = event.position
+			scroll_target = find_scroll(content_scroll, event.position)
+			scroll_slider = find_slider(content_scroll, event.position)
+			if not is_instance_valid(scroll_target) and not is_instance_valid(scroll_slider): return
+			scroll_touch = event.index
+			scroll_dragging = false
+			scroll_button = find_button(scroll_target, event.position)
+			if is_instance_valid(scroll_slider): slider_start_value = scroll_slider.get_meta("scroll_value").call() if scroll_slider.has_meta("scroll_value") else scroll_slider.value
+		elif not event.pressed and event.index == scroll_touch:
+			scroll_touch = -1
+			# GUI release runs after _input; keep the cancellation flag until then.
+			call_deferred("finish_scroll")
+	elif event is InputEventScreenDrag and event.index == scroll_touch:
+		var delta = event.position - scroll_origin
+		var factor = overlay.scale.x
+		if is_instance_valid(scroll_target) and not scroll_dragging and absf(delta.y) > 8 * factor and absf(delta.y) > absf(delta.x):
+			scroll_dragging = true
+			if is_instance_valid(scroll_button):
+				scroll_button.set_pressed_no_signal(false)
+				if scroll_button is OptionButton: scroll_button.get_popup().hide()
+		if scroll_dragging and is_instance_valid(scroll_target):
+			if is_instance_valid(scroll_slider): scroll_slider.set_value_no_signal(slider_start_value)
+			scroll_target.scroll_vertical -= roundi((event.position.y - scroll_last.y) / factor)
+			get_viewport().set_input_as_handled()
+		scroll_last = event.position
+
+func finish_scroll():
+	var restore_slider = scroll_dragging and is_instance_valid(scroll_slider)
+	if scroll_dragging and is_instance_valid(scroll_button) and scroll_button is OptionButton: scroll_button.get_popup().hide()
+	scroll_dragging = false
+	if is_instance_valid(scroll_slider):
+		if restore_slider: scroll_slider.set_value_no_signal(slider_start_value)
+		scroll_slider.value_changed.emit(scroll_slider.value)
+	scroll_slider = null
+	scroll_button = null
+	scroll_target = null
+
+func bind_scroll_slider(slider: HSlider, getter: Callable, commit: Callable):
+	slider.set_meta("scroll_value", getter)
+	slider.set_meta("scroll_commit", commit)
+	# Godot can dispatch the emulated mouse press before ScreenTouch. Delay model
+	# changes until the gesture is known, so a vertical swipe preserves its value.
+	slider.value_changed.connect(func(_value): call_deferred("commit_slider_change", slider))
+
+func commit_slider_change(slider: HSlider):
+	if scroll_touch == -1 and not scroll_dragging and is_instance_valid(slider) and not slider.is_queued_for_deletion(): slider.get_meta("scroll_commit").call(slider.value)
+
+func find_scroll(node: Node, point: Vector2) -> ScrollContainer:
+	if node is Control and (not node.is_visible_in_tree() or not node.get_global_rect().has_point(point)): return null
+	if node.has_meta("drag_surface"): return null
+	for child in node.get_children():
+		var nested = find_scroll(child, point)
+		if is_instance_valid(nested): return nested
+	if node is ScrollContainer and node.vertical_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED and node.get_v_scroll_bar().max_value > node.size.y + 1: return node
+	return null
+
+func find_button(node: Node, point: Vector2) -> BaseButton:
+	if node is Control and (not node.is_visible_in_tree() or not node.get_global_rect().has_point(point)): return null
+	if node is BaseButton: return node
+	for child in node.get_children():
+		var found = find_button(child, point)
+		if is_instance_valid(found): return found
+	return null
+
+func find_slider(node: Node, point: Vector2) -> HSlider:
+	if node is Control and (not node.is_visible_in_tree() or not node.get_global_rect().has_point(point)): return null
+	if node is HSlider: return node
+	for child in node.get_children():
+		var found = find_slider(child, point)
+		if is_instance_valid(found): return found
+	return null
 func text(parent: Node, value: String, size: int = 18) -> Label:
 	var label = Label.new()
 	label.text = value
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_font_size_override("font_size", size)
+	label.add_theme_font_size_override("font_size", mini(size, 20) if is_mobile() else size)
 	label.add_theme_color_override("font_color", Color("eee9d7"))
 	parent.add_child(label)
 	return label
@@ -217,7 +323,7 @@ func button(parent: Node, value: String, action: Callable) -> Button:
 	if is_instance_valid(game.touch_controls) and game.touch_controls.enabled:
 		b.custom_minimum_size.y = 44
 		b.add_theme_font_size_override("font_size", 14)
-	b.pressed.connect(action)
+	b.pressed.connect(func(): if not scroll_dragging: action.call())
 	parent.add_child(b)
 	return b
 
@@ -245,7 +351,7 @@ func _process(dt: float):
 	if game.projects.active.get("pending", false): state_text.text += "  ·  Команда ждёт решения по проекту [P]"
 	if overlay.visible:
 		info.text = "День %d · %s   |   %s" % [s.day(), s.phase_name(), "Время остановлено" if freezes else "Команда продолжает жизнь лагеря"]
-		if game.ui.mobile_layout: info.text = "День %d · %d руб.\nЗаряд %.0f%% · Еда %.0f · Вода %.0f" % [s.day(), game.money, s.percent(), s.food, s.water]
+		if game.ui.mobile_layout: info.text = "%d руб. · Заряд %.0f%% · Еда %.0f · Вода %.0f" % [game.money, s.percent(), s.food, s.water]
 		if section == "projects":
 			if panel_version != project_version():
 				freezes = not game.camping or (game.projects.active.get("pending", false) and not game.model.auto_projects)
@@ -268,6 +374,8 @@ func open_panel(kind: String):
 	build_panel()
 
 func close_panel():
+	scroll_touch = -1
+	finish_scroll()
 	screens.close_preview()
 	overlay.hide()
 	freezes = false
@@ -284,11 +392,18 @@ func build_panel():
 	for child in content.get_children():
 		content.remove_child(child)
 		child.queue_free()
+	for holder in [sticky_toolbar, sticky_footer]:
+		for child in holder.get_children():
+			holder.remove_child(child)
+			child.queue_free()
+	content_scroll.scroll_vertical = 0
+	content_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	title.text = {"projects": "Передвижная IT-студия", "camp": "Наша стоянка", "crew": "Команда экспедиции", "journal": "Путевой дневник", "upgrades": "Мастерская Буханки", "settings": "Настройки экспедиции", "placement": "Выбор места для лагеря", "editor": "Кто отправится выше облаков?", "rescue": "Помощь из долины", "new": "Новая экспедиция"}.get(section, section)
 	if is_instance_valid(game.touch_controls) and game.touch_controls.enabled:
 		sidebar.hide()
-		if is_instance_valid(mobile_navigation): mobile_navigation.visible = section != "editor"
-		title.text = {"editor": "Наша команда", "camp": "Лагерь", "projects": "Проекты", "crew": "Команда", "journal": "Дневник", "upgrades": "Улучшения", "settings": "Настройки"}.get(section, title.text)
+		if is_instance_valid(mobile_navigation): mobile_navigation.visible = section not in ["editor", "placement"]
+		info.visible = section not in ["editor", "placement"] and overlay.size.y >= 400
+		title.text = {"editor": "Наша команда", "placement": "Место для лагеря", "camp": "Лагерь", "projects": "Проекты", "crew": "Команда", "journal": "Дневник", "upgrades": "Улучшения", "settings": "Настройки"}.get(section, title.text)
 	match section:
 		"projects": build_projects()
 		"camp": screens.build_camp()
@@ -307,8 +422,11 @@ func build_panel():
 		"new":
 			text(content, "Текущее путешествие будет сохранено отдельной резервной копией. Новая команда начнёт с 1500 ₽, полным зарядом и базовым снаряжением.")
 			button(content, "Начать новую экспедицию", func(): game.new_expedition())
+	sticky_toolbar.visible = sticky_toolbar.get_child_count() > 0
+	sticky_footer.visible = sticky_footer.get_child_count() > 0
 
 func build_projects():
+	if is_mobile(): screens.mobile.setup(screens); screens.mobile.build_projects(); return
 	var auto = CheckButton.new()
 	auto.text = "Автоуправление проектами"
 	auto.button_pressed = game.model.auto_projects

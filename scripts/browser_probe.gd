@@ -19,6 +19,23 @@ static func publish(g: Node):
 	var overflowing: Array = []
 	collect_overflow(g.rpg_ui.body, factor, width, overflowing)
 	state["overflow"] = overflowing
+	var scroll = g.rpg_ui.content_scroll
+	state["scroll"] = {"offset": scroll.scroll_vertical, "max": maxf(0, scroll.get_v_scroll_bar().max_value - scroll.get_v_scroll_bar().page), "horizontal": scroll.scroll_horizontal, "bounds": bounds(scroll, factor)}
+	state["camping"] = g.camping
+	state["ghost"] = is_instance_valid(g.rpg_ui.screens.ghost)
+	state["camp_angle"] = g.rpg_ui.screens.angle
+	state["performance"] = {"process_ms": Performance.get_monitor(Performance.TIME_PROCESS) * 1000, "physics_ms": Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000, "draws": Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), "primitives": Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)}
+	state["candidate"] = [g.rpg_ui.screens.candidate.x, g.rpg_ui.screens.candidate.z]
+	state["voice_volume"] = g.model.voice_volume
+	state["modules"] = g.model.upgrades
+	var sliders: Dictionary = {}
+	collect_sliders(g.rpg_ui, factor, sliders)
+	state["sliders"] = sliders
+	var popups: Array = []
+	collect_popups(g.rpg_ui, factor, popups)
+	state["popups"] = popups
+	if is_instance_valid(g.rpg_ui.screens.preview) and g.rpg_ui.section == "placement" and g.rpg_ui.overlay.visible:
+		state["camp_map"] = bounds(g.rpg_ui.screens.preview.get_parent(), factor)
 	JavaScriptBridge.eval("window.bukhankaTestState = " + JSON.stringify(state))
 
 static func collect_overflow(node: Node, factor: float, width: float, result: Array):
@@ -36,3 +53,13 @@ static func collect_buttons(node: Node, factor: float, result: Array):
 		var caption = str(node.get_meta("caption").text) if node.has_meta("caption") else node.text
 		result.append({"name": str(node.name), "text": caption, "disabled": node.disabled, "x": rect.position.x * factor, "y": rect.position.y * factor, "width": rect.size.x * factor, "height": rect.size.y * factor})
 	for child in node.get_children(): collect_buttons(child, factor, result)
+
+static func collect_popups(node: Node, factor: float, result: Array):
+	if node is OptionButton and node.get_popup().visible:
+		var popup = node.get_popup()
+		result.append({"name": str(node.name), "x": popup.position.x * factor, "y": popup.position.y * factor, "width": popup.size.x * factor, "height": popup.size.y * factor, "items": popup.item_count})
+	for child in node.get_children(): collect_popups(child, factor, result)
+
+static func collect_sliders(node: Node, factor: float, result: Dictionary):
+	if node is HSlider and node.is_visible_in_tree(): result[str(node.name)] = bounds(node, factor)
+	for child in node.get_children(): collect_sliders(child, factor, result)

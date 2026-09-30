@@ -24,11 +24,16 @@ async function main() {
       if (process.env.E2E_TARGET && process.env.E2E_TARGET !== name) continue;
       const context = await browser.newContext(config);
       const page = await context.newPage();
+      if(process.env.E2E_MOBILE_NETWORK && config.hasTouch) {
+        const network=await context.newCDPSession(page);
+        await network.send('Network.enable');
+        await network.send('Network.emulateNetworkConditions',{offline:false,latency:70,downloadThroughput:1280000,uploadThroughput:512000,connectionType:'cellular4g'});
+      }
       const errors = [];
       page.on('pageerror', e => errors.push(e.message));
       page.on('console', m => {if(m.type()==='error') errors.push(m.text());});
       const started = Date.now();
-      await page.goto(`http://127.0.0.1:${port}/?e2e=${name}`, {waitUntil:'domcontentloaded'});
+      await page.goto(`${process.env.E2E_BASE_URL || `http://127.0.0.1:${port}`}/?e2e=${name}`, {waitUntil:'domcontentloaded'});
       await page.waitForFunction(()=>window.bukhankaTestState?.buttons?.length>0, null, {timeout:120000});
       await page.waitForTimeout(1000);
       const state = () => page.evaluate(()=>window.bukhankaTestState);
@@ -39,6 +44,7 @@ async function main() {
         await page.waitForTimeout(650);
       }
       async function tapText(text) {
+        if(config.hasTouch && text==='Настройки') text='Опции';
         const view=page.viewportSize();
         const b=(await state()).buttons.find(b=>b.text.includes(text)&&!b.disabled&&b.x>=0&&b.y>=0&&b.x+b.width<=view.width+1&&b.y+b.height<=view.height+1);
         assert(b, 'Reachable button missing: '+text);
@@ -130,7 +136,10 @@ async function main() {
         fs.writeFileSync(path.join(artifacts,`${name}-follow-state.json`),JSON.stringify(followed,null,2));
         await shot('camera-follow');
         assert(followed.speed>2&&angleError(followed.yaw,target)<.12,'Camera failed to return behind travel: '+JSON.stringify({speed:followed.speed,throttle:followed.throttle,yaw:followed.yaw,target,clock:followed.follow_clock}));
-        cameraResult={errorDegrees:Math.round(angleError(followed.yaw,target)*180/Math.PI),fps:followed.fps};
+        const fpsSamples=[];
+        for(let i=0;i<5;i++) {fpsSamples.push((await state()).fps);await page.waitForTimeout(500);}
+        const fpsMedian=[...fpsSamples].sort((a,b)=>a-b)[2];
+        cameraResult={errorDegrees:Math.round(angleError(followed.yaw,target)*180/Math.PI),fps:fpsMedian,fpsSamples,performance:followed.performance};
         assert(cameraResult.fps>=30,'Mobile driving falls below 30 FPS');
         const b=followed.controls.MobileBrake;
         await send('touchStart',[joy,{id:3,x:b.x+b.width/2,y:b.y+b.height/2}]);
@@ -148,6 +157,7 @@ async function main() {
         checkPanel(await state());
         await shot('quick-camp');
         await tapText('×');
+        assert(!(await state()).ghost,'Camp placement grid survives closing the window');
         await page.waitForFunction(()=>window.bukhankaTestState?.running);
         await tapControl('MobileTools');
         assert((await state()).tools&&!(await state()).running,'Tools do not pause simulation');

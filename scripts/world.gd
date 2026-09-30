@@ -173,6 +173,7 @@ func triangle_height(a: float, b: float, c: float, d: float, u: float, v: float)
 	return a + (b - a) * u + (c - b) * v if v <= u else a + (c - d) * u + (d - a) * v
 
 var column_cache: Dictionary = {}
+var height_rows: Dictionary = {}
 func cached_columns(z: float) -> Array:
 	if not column_cache.has(z):
 		if column_cache.size() > 1200: column_cache.clear()
@@ -202,7 +203,11 @@ func drive_height(x: float, z: float) -> float:
 	return a + (c - d) * u + (d - a) * v
 
 func contact_ground(x: float, z: float) -> float:
-	return ground(x, z) - (surface_effects.depth_at(x, z) if is_instance_valid(surface_effects) else 0.0)
+	# Terrain vertices are immutable; tire deformation remains live and separate.
+	if not height_rows.has(z): height_rows[z] = {}
+	var row: Dictionary = height_rows[z]
+	if not row.has(x): row[x] = ground(x, z)
+	return row[x] - (surface_effects.depth_at(x, z) if is_instance_valid(surface_effects) else 0.0)
 
 func triangle(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, color: Color):
 	st.set_color(color)
@@ -227,6 +232,8 @@ func update_chunks(z: float, immediate = false):
 	var center = int(floor(z / LENGTH))
 	var behind = 1 if OS.has_feature("web") else 3
 	var ahead = 5 if OS.has_feature("web") else 9
+	for row_z in height_rows.keys():
+		if row_z < (center - behind) * LENGTH - STEP or row_z > (center + ahead + 1) * LENGTH + STEP: height_rows.erase(row_z)
 	for key in chunks.keys():
 		if key < center - behind or key > center + ahead:
 			chunks[key].queue_free()
@@ -327,6 +334,10 @@ func build_chunk(index: int, immediate: bool = true):
 		surface.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var transforms: Array[Transform3D] = []
 	for j in range(110):
+		if not immediate and Time.get_ticks_usec() - batch_start > 1800:
+			await get_tree().process_frame
+			if not is_instance_valid(root) or root.is_queued_for_deletion(): building_chunk = false; return
+			batch_start = Time.get_ticks_usec()
 		var z = rng.randf_range(start, start + LENGTH)
 		var x = road_x(z) + rng.randf_range(-230, 230)
 		if start_clearing(x, z) > 0.05: continue
@@ -358,8 +369,10 @@ func build_chunk(index: int, immediate: bool = true):
 		river_rocks.append(Transform3D(Basis().scaled(size), Vector3(x, ground(x, z), z)))
 	add_rock_batch(root, river_rocks, wood)
 	decorate_chunk(root, index, rng)
-	preload("res://scripts/scenery.gd").populate(self, root, index, rng)
+	if immediate: preload("res://scripts/scenery.gd").populate(self, root, index, rng)
+	else: await preload("res://scripts/scenery.gd").populate(self, root, index, rng, false)
 	building_chunk = false
+	if not is_instance_valid(root) or root.is_queued_for_deletion(): return
 	root.set_meta("ready", true)
 	var pz = start + 70.0
 	if posmod(index, 4) == 1:

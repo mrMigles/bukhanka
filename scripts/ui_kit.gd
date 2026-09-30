@@ -137,7 +137,8 @@ static func icon(key: String, color: String = "eef8f5") -> Texture2D:
 		"moon": '<path d="M24 26A13 13 0 0 1 12 2a12 12 0 0 0 12 24Z"/>',
 		"home": '<path d="m2 15 14-12 14 12M6 12v18h20V12M13 30V19h7v11"/>',
 		"money": '<path d="M10 30V3h10a7 7 0 0 1 0 14H5m0 6h17"/>',
-		"close": '<path d="m6 6 20 20M6 26 26 6"/>'
+		"close": '<path d="m6 6 20 20M6 26 26 6"/>',
+		"down": '<path d="m6 11 10 10 10-10"/>'
 	}
 	var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 32 32"><g fill="none" stroke="#%s" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">%s</g></svg>' % [color, paths.get(key, paths.mountain)]
 	var im = Image.new()

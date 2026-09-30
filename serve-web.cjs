@@ -2,7 +2,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(process.env.WEB_ROOT || path.join(__dirname, 'builds/Web'));
-const mime = {'.html':'text/html; charset=utf-8','.js':'application/javascript','.wasm':'application/wasm','.pck':'application/octet-stream','.png':'image/png','.svg':'image/svg+xml','.json':'application/json'};
+const mime = {'.html':'text/html; charset=utf-8','.js':'application/javascript','.wasm':'application/wasm','.pck':'application/octet-stream','.png':'image/png','.webp':'image/webp','.css':'text/css','.svg':'image/svg+xml','.json':'application/json'};
 const port = Number(process.env.PORT || 8065);
 const server = http.createServer((req,res)=>{
   let pathname;
@@ -22,7 +22,7 @@ const server = http.createServer((req,res)=>{
           return;
         }
         const etag = `W/"${stat.size}-${Math.trunc(stat.mtimeMs)}-${encoding || 'identity'}"`;
-        const immutable = /^(game-[0-9a-f]{12}\.|pwa-update-[0-9a-f]{12}\.js$)/.test(path.basename(file));
+        const immutable = /^(game-[0-9a-f]{12}\.|(?:pwa-update|loading)-[0-9a-f]{12}\.js$|poster-[0-9a-f]{12}\.webp$)/.test(path.basename(file));
         const headers = {
           'Content-Type': mime[path.extname(file)] || 'application/octet-stream',
           'Content-Length': selectedStat.size,
