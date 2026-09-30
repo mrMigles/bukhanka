@@ -1,0 +1,7 @@
+services:
+  bukhanka:
+    image: ghcr.io/mrmigles/bukhanka:latest
+    pull_policy: always
+    restart: unless-stopped
+    ports:
+      - "${BUKHANKA_PORT:-8065}:80"
