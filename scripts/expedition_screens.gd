@@ -159,7 +159,7 @@ func build_editor():
 	ui.text(ui.content, "Соберите свою четвёрку или оставьте готовую команду. Модель сразу показывает выбранные цвета и головной убор.", 15)
 	var strip = ScrollContainer.new()
 	strip.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED if ui.mobile_portrait else ScrollContainer.SCROLL_MODE_AUTO
-	strip.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if ui.mobile_portrait else ScrollContainer.SCROLL_MODE_DISABLED
+	strip.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if is_instance_valid(g.touch_controls) and g.touch_controls.enabled else ScrollContainer.SCROLL_MODE_DISABLED
 	strip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	strip.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	ui.content.add_child(strip)
@@ -180,7 +180,7 @@ func build_editor():
 		card.add_child(name_edit)
 		compact_option(card, g.model.ROLES, hero.role, func(value): hero.role = value)
 		compact_option(card, g.model.TALENTS, hero.talent, func(value): hero.talent = value)
-		var appearance = HBoxContainer.new()
+		var appearance: BoxContainer = VBoxContainer.new() if ui.mobile_portrait else HBoxContainer.new()
 		appearance.add_theme_constant_override("separation", 4)
 		card.add_child(appearance)
 		compact_option(appearance, ["Охра", "Голубой", "Терракота", "Зелёный"], hero.shirt, func(value): hero.shirt = value; rebuild_person_preview(viewport, hero))
@@ -221,6 +221,9 @@ func compact_option(parent: Node, entries: Array, selected: int, action: Callabl
 	menu.fit_to_longest_item = false
 	menu.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	menu.custom_minimum_size.y = 32
+	if is_instance_valid(ui.game.touch_controls) and ui.game.touch_controls.enabled:
+		menu.custom_minimum_size.y = 44
+		menu.add_theme_font_size_override("font_size", 14)
 	menu.item_selected.connect(action)
 	parent.add_child(menu)
 	return menu
@@ -271,6 +274,7 @@ func rebuild_person_preview(viewport: SubViewport, hero: Dictionary):
 	person.position = Vector3(0, 0.05, 0)
 	preload("res://scripts/crew_visual.gd").animate(person, "Отдыхает", 0.0, false)
 	maker.free()
+	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 func build_upgrades():
 	var g = ui.game
@@ -381,14 +385,14 @@ func build_settings():
 	live_label(graphics_card, func(): return g.graphics.status(), 16)
 	var shadows = CheckButton.new()
 	shadows.name = "GraphicsShadows"
-	shadows.text = "Тени солнца и деревьев"
+	shadows.text = "Тени" if ui.mobile_portrait else "Тени солнца и деревьев"
 	shadows.button_pressed = g.graphics.shadows
 	shadows.custom_minimum_size.y = 44
 	shadows.toggled.connect(func(on): g.graphics.set_shadows(on))
 	graphics_card.add_child(shadows)
 	var nature = CheckButton.new()
 	nature.name = "GraphicsNature"
-	nature.text = "Ветер, пыль, дождь и брызги"
+	nature.text = "Погода и эффекты" if ui.mobile_portrait else "Ветер, пыль, дождь и брызги"
 	nature.button_pressed = g.graphics.nature
 	nature.custom_minimum_size.y = 44
 	nature.toggled.connect(func(on): g.graphics.set_nature(on))
@@ -421,9 +425,9 @@ func build_settings():
 	volume.value_changed.connect(func(value): g.model.voice_volume = value)
 	card.add_child(volume)
 	ui.button(card, "Переключить общий звук", func(): g.toggle_sound())
-	ui.button(card, "Кинематографическая камера · K", ui.toggle_cinema)
+	ui.button(card, "Кинокамера" if ui.mobile_portrait else "Кинематографическая камера · K", ui.toggle_cinema)
 	ui.button(card, "Как играть · обучение", func(): ui.close_panel(); g.tutorial.open())
-	ui.text(card, "WASD — ехать · ПКМ — обзор · C — камера\nE — место лагеря · B — стоянка · P — проекты\nL — пониженная · F — лебёдка · J — автопилот\nU — мастерская · O — фоторежим · Esc — закрыть", 18)
+	ui.text(card, "Джойстик — газ и руль. Проведите по миру для обзора. 4H/4L — пониженная. Камера и дополнительные действия — справа внизу." if is_instance_valid(g.touch_controls) and g.touch_controls.enabled else "WASD — ехать · ПКМ — обзор · C — камера\nE — место лагеря · B — стоянка · P — проекты\nL — пониженная · F — лебёдка · J — автопилот\nU — мастерская · O — фоторежим · Esc — закрыть", 16)
 
 func build_journal():
 	var g = ui.game

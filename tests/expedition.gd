@@ -73,8 +73,11 @@ func run():
 	check(g.effects.depth_at(p.x, p.z) > 0.03, "Tires deform contact terrain")
 	check(g.effects.cells.size() > 0, "Tracks persist in bounded world cells")
 	var test_touch = InputEventScreenTouch.new()
+	g.touch_controls.enabled = true
+	g.ui.apply_mobile_layout()
+	g.touch_controls.visible = true
 	test_touch.index = 0
-	test_touch.position = g.touch_controls.center + Vector2(30, -60)
+	test_touch.position = g.touch_controls.get_global_transform_with_canvas() * (g.touch_controls.center + Vector2(30, -60))
 	test_touch.pressed = true
 	g.touch_controls._input(test_touch)
 	check(g.touch_controls.throttle > 0.5 and g.touch_controls.steer < -0.2, "Touch joystick controls throttle and steering")

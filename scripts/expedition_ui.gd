@@ -142,13 +142,14 @@ func _ready():
 	sleep_cover.color = Color(0.02, 0.03, 0.06, 0)
 	sleep_cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(sleep_cover)
+	get_viewport().size_changed.connect(func(): call_deferred("configure_mobile_layout"))
 
 func configure_mobile_layout():
 	if not is_instance_valid(game.touch_controls) or not game.touch_controls.enabled: return
 	var view = get_viewport_rect().size
 	var portrait = view.y > view.x
 	mobile_portrait = portrait
-	var factor = 3.35 if portrait else 1.45
+	var factor = game.touch_controls.scale.x
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	overlay.position = Vector2.ZERO
 	overlay.size = view / factor
@@ -157,30 +158,45 @@ func configure_mobile_layout():
 	body.offset_right = -10
 	body.offset_top = 10
 	body.offset_bottom = -10
-	sidebar.custom_minimum_size.x = 125 if portrait else 160
+	sidebar.custom_minimum_size.x = 144
 	resource_cards[0].get_parent().get_parent().get_parent().hide()
 	content_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED if portrait else ScrollContainer.SCROLL_MODE_AUTO
 	close_button.text = "×"
 	close_button.custom_minimum_size = Vector2(45, 45)
-	var names = {"camp": "Лагерь", "projects": "Проекты", "crew": "Команда", "upgrades": "Улучшения", "journal": "Дневник", "settings": "Настройки"}
+	title.add_theme_font_size_override("font_size", 24)
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	info.add_theme_font_size_override("font_size", 12)
+	panel_layout.get_child(0).add_theme_constant_override("separation", 10)
+	panel_layout.get_child(0).get_child(0).custom_minimum_size = Vector2(32, 32)
+	if not is_instance_valid(mobile_navigation):
+		mobile_navigation = HFlowContainer.new()
+		mobile_navigation.add_theme_constant_override("h_separation", 4)
+		mobile_navigation.add_theme_constant_override("v_separation", 4)
+		panel_layout.add_child(mobile_navigation)
+		panel_layout.move_child(mobile_navigation, 2)
+	var names = {"camp": "Лагерь", "projects": "Проекты", "crew": "Команда", "upgrades": "Машина", "journal": "Дневник", "settings": "Настройки"}
 	for key in nav_buttons:
 		var button_node: Button = nav_buttons[key]
-		button_node.custom_minimum_size.y = 50 if portrait else 58
+		var parent: Node = mobile_navigation
+		if button_node.get_parent() != parent:
+			button_node.get_parent().remove_child(button_node)
+			parent.add_child(button_node)
+		var columns = 3 if portrait else 6
+		button_node.custom_minimum_size = Vector2(floorf((view.x / factor - 48 - (columns - 1) * 4) / columns), 56)
 		Kit.caption(button_node, names[key])
-		if portrait: button_node.add_theme_font_size_override("font_size", 16)
-	if portrait:
-		var navigation = HFlowContainer.new()
-		mobile_navigation = navigation
-		navigation.add_theme_constant_override("h_separation", 4)
-		navigation.add_theme_constant_override("v_separation", 4)
-		panel_layout.add_child(navigation)
-		panel_layout.move_child(navigation, 2)
-		for key in nav_buttons:
-			var item: Button = nav_buttons[key]
-			sidebar.remove_child(item)
-			item.custom_minimum_size = Vector2(120, 44)
-			navigation.add_child(item)
-		sidebar.hide()
+		var symbol: TextureRect = button_node.get_meta("symbol")
+		symbol.show()
+		symbol.custom_minimum_size = Vector2(20, 20)
+		var line: BoxContainer = symbol.get_parent()
+		line.vertical = true
+		line.add_theme_constant_override("separation", 2)
+		var margin = line.get_parent().get_parent()
+		margin.add_theme_constant_override("margin_left", 6)
+		margin.add_theme_constant_override("margin_right", 6)
+		button_node.get_meta("caption").add_theme_font_size_override("font_size", 11)
+	sidebar.hide()
+	mobile_navigation.visible = section != "editor"
+	if not section.is_empty(): build_panel()
 
 func style(panel: Control):
 	panel.add_theme_stylebox_override("panel", Kit.box(false, 14))
@@ -198,6 +214,9 @@ func button(parent: Node, value: String, action: Callable) -> Button:
 	b.text = value
 	b.custom_minimum_size.y = 36
 	b.add_theme_font_size_override("font_size", 17)
+	if is_instance_valid(game.touch_controls) and game.touch_controls.enabled:
+		b.custom_minimum_size.y = 44
+		b.add_theme_font_size_override("font_size", 14)
 	b.pressed.connect(action)
 	parent.add_child(b)
 	return b
@@ -212,7 +231,7 @@ func _process(dt: float):
 	if not is_instance_valid(game.ui): return
 	resource_text.hide()
 	actions.hide()
-	state_text.visible = game.started and not game.photo and not overlay.visible and not game.paused
+	state_text.visible = game.started and not game.photo and not overlay.visible and not game.paused and not game.ui.mobile_layout
 	refresh_clock += dt
 	if refresh_clock < 0.2: return
 	refresh_clock = 0
@@ -226,6 +245,7 @@ func _process(dt: float):
 	if game.projects.active.get("pending", false): state_text.text += "  ·  Команда ждёт решения по проекту [P]"
 	if overlay.visible:
 		info.text = "День %d · %s   |   %s" % [s.day(), s.phase_name(), "Время остановлено" if freezes else "Команда продолжает жизнь лагеря"]
+		if game.ui.mobile_layout: info.text = "День %d · %d руб.\nЗаряд %.0f%% · Еда %.0f · Вода %.0f" % [s.day(), game.money, s.percent(), s.food, s.water]
 		if section == "projects":
 			if panel_version != project_version():
 				freezes = not game.camping or (game.projects.active.get("pending", false) and not game.model.auto_projects)
@@ -266,7 +286,7 @@ func build_panel():
 		child.queue_free()
 	title.text = {"projects": "Передвижная IT-студия", "camp": "Наша стоянка", "crew": "Команда экспедиции", "journal": "Путевой дневник", "upgrades": "Мастерская Буханки", "settings": "Настройки экспедиции", "placement": "Выбор места для лагеря", "editor": "Кто отправится выше облаков?", "rescue": "Помощь из долины", "new": "Новая экспедиция"}.get(section, section)
 	if is_instance_valid(game.touch_controls) and game.touch_controls.enabled:
-		sidebar.visible = section != "editor" and not mobile_portrait
+		sidebar.hide()
 		if is_instance_valid(mobile_navigation): mobile_navigation.visible = section != "editor"
 		title.text = {"editor": "Наша команда", "camp": "Лагерь", "projects": "Проекты", "crew": "Команда", "journal": "Дневник", "upgrades": "Улучшения", "settings": "Настройки"}.get(section, title.text)
 	match section:

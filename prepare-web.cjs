@@ -15,6 +15,21 @@ async function main() {
   let html = await fs.readFile(htmlPath, 'utf8');
   for (const suffix of ['js', 'wasm', 'pck']) html = html.replaceAll(`index.${suffix}`, `${stem}.${suffix}`);
   html = html.replace('"executable":"index"', `"executable":"${stem}"`);
+  html = html.replace('initial-scale=1.0', 'initial-scale=1.0, viewport-fit=cover');
+  // Own canvas sizing instead of allocating full DPR=3/4 phone framebuffers.
+  html = html.replace('"canvasResizePolicy":2', '"canvasResizePolicy":0');
+  html = html.replace('const engine = new Engine(GODOT_CONFIG);', `const engine = new Engine(GODOT_CONFIG);
+const gameCanvas = document.getElementById('canvas');
+function resizeGameCanvas() {
+  const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
+  gameCanvas.width = Math.round(innerWidth * ratio);
+  gameCanvas.height = Math.round(innerHeight * ratio);
+  gameCanvas.style.width = innerWidth + 'px';
+  gameCanvas.style.height = innerHeight + 'px';
+}
+resizeGameCanvas();
+window.addEventListener('resize', resizeGameCanvas);`);
+  html = html.replace('</head>', '<style>:root{--safe-left:env(safe-area-inset-left,0px);--safe-top:env(safe-area-inset-top,0px);--safe-right:env(safe-area-inset-right,0px);--safe-bottom:env(safe-area-inset-bottom,0px)}</style>\n</head>');
   if (!html.includes(`"executable":"${stem}"`) || !html.includes(`${stem}.js`)) throw new Error('Godot HTML layout changed');
   html = html.replace('</head>', `  <link rel="manifest" href="index.manifest.json">\n  <script defer src="pwa-update-${version}.js"></script>\n</head>`);
   await fs.writeFile(htmlPath, html);

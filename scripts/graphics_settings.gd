@@ -15,17 +15,26 @@ var shadow_clock = 0.0
 var path = "user://graphics.cfg"
 var last_shadow_center = -2147483648
 var shadow_chunks: Dictionary = {}
+var mobile_device = false
 
 func load_preferences(test_mode: bool):
+	mobile_device = OS.has_feature("web") and bool(JavaScriptBridge.eval("navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches", true))
+	if mobile_device:
+		shadows = false
+		scale = 0.75
 	path = "user://test_graphics.cfg" if test_mode else "user://graphics.cfg"
 	var config = ConfigFile.new()
 	if config.load(path) != OK: return
 	preset = str(config.get_value("graphics", "preset", "auto"))
 	if preset not in PRESETS: preset = "auto"
-	shadows = bool(config.get_value("graphics", "shadows", preset != "low"))
+	shadows = bool(config.get_value("graphics", "shadows", preset != "low" and not mobile_device))
 	nature = bool(config.get_value("graphics", "nature", true))
 	var saved_scale = config.get_value("graphics", "scale", 0.9)
 	scale = clampf(float(saved_scale), 0.6, 1.0) if (saved_scale is float or saved_scale is int) and is_finite(float(saved_scale)) else 0.9
+	# Auto preferences from the heavier release must not burden phone startup.
+	if mobile_device and preset == "auto":
+		shadows = false
+		scale = 0.75
 
 func save_preferences():
 	var config = ConfigFile.new()
@@ -42,9 +51,9 @@ func setup(owner_game: Node):
 func choose(value: String):
 	if value not in PRESETS: return
 	preset = value
-	shadows = preset != "low"
+	shadows = preset != "low" and not (preset == "auto" and mobile_device)
 	nature = true
-	scale = 0.75 if preset == "low" else 1.0 if preset == "high" else 0.9
+	scale = 0.75 if preset == "low" or (preset == "auto" and mobile_device) else 1.0 if preset == "high" else 0.9
 	apply()
 	save_preferences()
 
@@ -150,7 +159,7 @@ func description() -> String:
 		"low": return "Меньше частиц и мягкие детали. Для слабых устройств; природа и следы остаются живыми."
 		"high": return "Полная чёткость, сглаживание, дальние тени и больше частиц. Для мощного устройства."
 		"balanced": return "Тени рядом с машиной, движение леса, живая вода и выразительные эффекты."
-	return "Подстраивает чёткость под скорость устройства. Тени, погода и движение природы сохраняются."
+	return "Быстрый старт на телефоне без тяжёлых теней. Чёткость подстраивается автоматически; погода, вода и движение природы сохраняются."
 
 func status() -> String:
 	return "%d FPS · чёткость %d%%" % [Engine.get_frames_per_second(), roundi(current_scale * 100)]

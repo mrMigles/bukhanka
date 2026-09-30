@@ -101,7 +101,7 @@ func _ready():
 	build_menu()
 	build_garage()
 	build_pause()
-	get_viewport().size_changed.connect(layout_mobile_panels)
+	get_viewport().size_changed.connect(func(): call_deferred("layout_mobile_panels"))
 func build_menu():
 	menu = panel(self, Rect2(58, 136, 530, 584), Color(0.055, 0.12, 0.12, 0.95), 5)
 	label(menu, "АЛТАЙ  /  ЭКСПЕДИЦИЯ 4×4", Vector2(32, 25), 15, accent)
@@ -214,24 +214,42 @@ func apply_mobile_layout():
 	mobile_layout = true
 	menu_caption.text = "Джойстик — ехать  /  Проведите по миру — обзор"
 	for child in hud.get_children(): child.hide()
-	speed_label.get_parent().show()
-	speed_label.get_parent().position = Vector2(30, 205)
-	speed_label.get_parent().scale = Vector2(1.7, 1.7)
 	mini.hide()
-	layout_mobile_panels()
 	game.touch_controls.configure_mobile_layout()
+	layout_mobile_panels()
 	game.rpg_ui.configure_mobile_layout()
 
 func layout_mobile_panels():
 	if not mobile_layout: return
 	var view = get_viewport_rect().size
-	var portrait = view.y > view.x
-	var menu_factor = 2.5 if portrait else 1.35
+	var screen = game.touch_controls.screen_size
+	var density = game.touch_controls.scale.x
+	var menu_scale = minf((screen.x - 24) / 530.0, (screen.y - 32) / 584.0)
+	var menu_factor = density * menu_scale
 	menu.scale = Vector2.ONE * menu_factor
-	menu.position = Vector2((view.x - 530 * menu_factor) * 0.5, 100 if portrait else maxf(20, (view.y - 584 * menu_factor) * 0.5))
-	var pause_factor = 2.4 if portrait else 1.45
-	pause_panel.scale = Vector2.ONE * pause_factor
-	pause_panel.position = (view - Vector2(500, 410) * pause_factor) * 0.5
+	menu.position = Vector2((view.x - 530 * menu_factor) * 0.5, maxf(16 * density, (view.y - 584 * menu_factor) * 0.18))
+	for child in menu.get_children():
+		if child is Button:
+			child.custom_minimum_size.y = 48 / menu_scale
+			child.size.y = 48 / menu_scale
+			child.add_theme_font_size_override("font_size", roundi(14 / menu_scale))
+	pause_panel.scale = Vector2.ONE * density
+	var pause_size = Vector2(minf(400, screen.x - 32), 328)
+	pause_panel.size = pause_size
+	pause_panel.position = (view - pause_size * density) * 0.5
+	var button_index = 0
+	var label_index = 0
+	for child in pause_panel.get_children():
+		if child is Button:
+			child.position = Vector2(16, 90 + button_index * 58)
+			child.size = Vector2(pause_size.x - 32, 48)
+			child.add_theme_font_size_override("font_size", 15)
+			button_index += 1
+		elif child is Label:
+			child.position = Vector2(16, 16 if label_index == 0 else 52)
+			child.add_theme_font_size_override("font_size", 22 if label_index == 0 else 12)
+			if label_index == 1: child.text = "Путешествие сохранено."
+			label_index += 1
 
 func draw_map():
 	mini.draw_circle(Vector2(102, 102), 100, Color(0.06, 0.16, 0.16, 0.93))

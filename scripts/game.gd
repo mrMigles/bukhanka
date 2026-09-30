@@ -31,6 +31,9 @@ var orbit_distance = 13.0
 var looking = false
 var camera_anchor = Vector3.ZERO
 var camera_idle = 0.0
+var camera_motion_clock = 0.0
+var browser_probe = false
+var probe_clock = 0.0
 var low_range = false
 var bog_warning = 0.0
 var discoveries: Array = []
@@ -110,6 +113,7 @@ var chatter = [
 func _ready():
 	test_mode = "--test-mode" in OS.get_cmdline_user_args()
 	graphics.load_preferences(test_mode)
+	if OS.has_feature("web"): browser_probe = bool(JavaScriptBridge.eval("new URLSearchParams(location.search).has('e2e')"))
 	saves.backup_legacy(test_mode)
 	var fresh = get_tree().root.get_meta("fresh_expedition", false)
 	get_tree().root.remove_meta("fresh_expedition")
@@ -147,7 +151,7 @@ func _ready():
 		DisplayServer.window_set_title("Буханка • Проверка сборки")
 	camera.position = van.position + Vector3(-8, 5, -12)
 	camera_anchor = van.position
-	orbit_yaw = heading - 0.45
+	orbit_yaw = -heading - 0.45
 	setup_dust()
 	setup_audio()
 	lighting.setup(self)
@@ -206,7 +210,7 @@ func setup_environment():
 	sun.rotation_degrees = Vector3(-31, -37, 0)
 	sun.light_color = Color("ffdfac")
 	sun.light_energy = 1.0
-	sun.shadow_enabled = true
+	sun.shadow_enabled = false
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
 	sun.directional_shadow_max_distance = 75
 	add_child(sun)
@@ -276,17 +280,17 @@ func make_audio(kind: int) -> AudioStreamWAV:
 
 func setup_audio():
 	engine_audio = AudioStreamPlayer.new()
-	engine_audio.stream = make_audio(0)
+	engine_audio.stream = load_loop("res://assets/audio/engine.wav")
 	engine_audio.volume_db = -19
 	add_child(engine_audio)
 	engine_audio.play()
 	wind_audio = AudioStreamPlayer.new()
-	wind_audio.stream = make_audio(1)
+	wind_audio.stream = load_loop("res://assets/audio/wind.wav")
 	wind_audio.volume_db = -20
 	add_child(wind_audio)
 	wind_audio.play()
 	music_audio = AudioStreamPlayer.new()
-	music_audio.stream = make_audio(2)
+	music_audio.stream = load_loop("res://assets/audio/music.wav")
 	music_audio.volume_db = -25
 	add_child(music_audio)
 	music_audio.play()
@@ -295,6 +299,12 @@ func setup_audio():
 	rain_audio.volume_db = -60
 	add_child(rain_audio)
 	rain_audio.play()
+
+func load_loop(path: String) -> AudioStreamWAV:
+	var stream: AudioStreamWAV = load(path)
+	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	stream.loop_end = roundi(stream.get_length() * stream.mix_rate)
+	return stream
 
 func _physics_process(delta):
 	if not simulation_running(): return
@@ -343,6 +353,7 @@ func _physics_process(delta):
 
 func simulation_running() -> bool:
 	if is_instance_valid(tutorial) and tutorial.visible: return false
+	if is_instance_valid(touch_controls) and touch_controls.tools_open: return false
 	return started and not paused and not ui.garage.visible and not photo and not (is_instance_valid(rpg_ui) and rpg_ui.overlay.visible and rpg_ui.freezes)
 
 func drive(delta: float):
@@ -381,6 +392,11 @@ func drive(delta: float):
 func _process(delta):
 	if not is_instance_valid(ui): return
 	graphics.tick(delta)
+	if browser_probe:
+		probe_clock += delta
+		if probe_clock > 0.2:
+			probe_clock = 0
+			preload("res://scripts/browser_probe.gd").publish(self)
 	chunk_timer += delta
 	if chunk_timer > 0.18:
 		world.update_chunks(van.position.z)
@@ -396,7 +412,7 @@ func _process(delta):
 	if is_instance_valid(effects): effects.update_surface(delta if simulation_running() else 0)
 	if simulation_running(): world.animate_wildlife(van.position, time, delta)
 	toast_timer = maxf(0, toast_timer - delta)
-	ui.toast_label.visible = toast_timer > 0
+	ui.toast_label.visible = toast_timer > 0 and not ui.mobile_layout
 	view_clock += delta
 	if view_clock > 0.1:
 		view_clock = 0
@@ -440,10 +456,7 @@ func update_camera(delta: float):
 		var height_delta = van.position.y - camera_anchor.y
 		if abs(height_delta) > 0.20:
 			camera_anchor.y = lerpf(camera_anchor.y, van.position.y - signf(height_delta) * 0.20, 1.0 - exp(-delta * (4.5 if abs(height_delta) > 1.2 else 1.5)))
-		camera_idle += delta
-		if camera_idle > 4.0 and abs(speed) > 2.0 and not camping and not photo:
-			var motion_yaw = atan2(dynamics.velocity.x, dynamics.velocity.z)
-			orbit_yaw = lerp_angle(orbit_yaw, motion_yaw, 1.0 - exp(-delta * 0.30))
+		update_camera_follow(delta)
 		look = camera_anchor + (camp.get_meta("focus", Vector3(0, 1.6, 0)) if camping and is_instance_valid(camp) else Vector3(0, 1.6, 0))
 		var dist = orbit_distance * (1.6 if camera_mode == 1 else 1.0)
 		var a = orbit_yaw
@@ -454,6 +467,23 @@ func update_camera(delta: float):
 	if started and (camera_mode != 2 or camping or photo) and world.camera_blocked(camera.position): camera.position = target
 	camera.look_at(look)
 	camera.fov = lerpf(camera.fov, 65.0 + minf(abs(speed) * 0.32, 9), delta * 2)
+
+func update_camera_follow(delta: float):
+	var manual = looking or (is_instance_valid(touch_controls) and touch_controls.camera_id != -1)
+	var velocity = Vector2(dynamics.velocity.x, dynamics.velocity.z)
+	if manual:
+		camera_idle = 0
+		camera_motion_clock = 0
+		return
+	camera_idle += delta
+	if not simulation_running() or camping or photo or camera_mode == 2 or velocity.length() < 1.0:
+		camera_motion_clock = 0
+		return
+	camera_motion_clock += delta
+	if camera_idle < 2.4 or camera_motion_clock < 2.4: return
+	# The orbit offset has a negative Z axis: the X sign must point behind travel.
+	var motion_yaw = atan2(-velocity.x, velocity.y)
+	orbit_yaw = lerp_angle(orbit_yaw, motion_yaw, 1.0 - exp(-delta * 0.9))
 
 func camp_camera_pose() -> Dictionary:
 	var phase = model.simulation_seconds
@@ -552,7 +582,7 @@ func start_trip():
 	paused = false
 	ui.menu.hide()
 	ui.pause_panel.hide()
-	toast("Джойстик — газ и руль. Проведите по миру для обзора. Для телефона удобнее альбомный режим." if is_instance_valid(touch_controls) and touch_controls.enabled else "ПКМ + мышь — обзор. Колесо — приближение. WASD — ехать, J — автопилот.")
+	toast("Джойстик — ехать · По миру — обзор" if is_instance_valid(touch_controls) and touch_controls.enabled else "ПКМ + мышь — обзор. Колесо — приближение. WASD — ехать, J — автопилот.")
 	if not tutorial_seen and not test_mode: tutorial.open()
 
 func show_title():
@@ -570,7 +600,9 @@ func toggle_pause():
 
 func cycle_camera():
 	camera_mode = (camera_mode + 1) % 3
-	orbit_yaw = 0.0 if camera_mode == 2 else heading - 0.45
+	orbit_yaw = 0.0 if camera_mode == 2 else -heading - 0.45
+	camera_idle = 0
+	camera_motion_clock = 0
 	orbit_pitch = 0.2 if camera_mode == 2 else 0.30
 	toast(["Камера: за буханкой", "Камера: панорама", "Камера: в салоне · четверо своих"][camera_mode])
 
@@ -738,7 +770,7 @@ func next_dialogue():
 
 func toast(message: String):
 	ui.toast_label.text = message
-	toast_timer = 6
+	toast_timer = 3 if is_instance_valid(touch_controls) and touch_controls.enabled else 6
 
 func toggle_photo():
 	if ui.garage.visible: return
@@ -848,6 +880,7 @@ func exit_game():
 		get_tree().quit()
 
 func _unhandled_input(event):
+	if is_instance_valid(touch_controls) and touch_controls.enabled: return
 	if is_instance_valid(rpg_ui) and rpg_ui.overlay.visible: return
 	if started and not paused and not ui.garage.visible and event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:

@@ -19,7 +19,8 @@ static func button_content(button: Button, key: String, caption: String = "", st
 	var center = CenterContainer.new()
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(center)
-	var line: BoxContainer = VBoxContainer.new() if stacked else HBoxContainer.new()
+	var line = BoxContainer.new()
+	line.vertical = stacked
 	line.alignment = BoxContainer.ALIGNMENT_CENTER
 	line.add_theme_constant_override("separation", 5 if stacked else 12)
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -106,6 +107,8 @@ static func icon(key: String, color: String = "eef8f5") -> Texture2D:
 	var id = key + color
 	if icons.has(id): return icons[id]
 	var paths = {
+		"menu": '<path d="M5 8h22M5 16h22M5 24h22"/>',
+		"more": '<circle cx="6" cy="16" r="2"/><circle cx="16" cy="16" r="2"/><circle cx="26" cy="16" r="2"/>',
 		"camp": '<path d="M5 27 16 5l11 22H5zm8 0 3-10 4 10M14 4l5 5"/>',
 		"mountain": '<path d="m2 26 9-13 4 5 7-13 9 21M7 19l4-6 4 5M19 10l3-5 5 10"/>',
 		"projects": '<rect x="5" y="5" width="22" height="18" rx="2"/><path d="M2 28h28M12 23v5m8-5v5"/>',
