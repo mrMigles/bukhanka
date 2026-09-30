@@ -364,6 +364,46 @@ func van_preview(parent: Node):
 
 func build_settings():
 	var g = ui.game
+	var graphics_card = Kit.card(ui.content)
+	ui.text(graphics_card, "Графика", 23)
+	var quality = OptionButton.new()
+	quality.name = "GraphicsPreset"
+	for label in g.graphics.TITLES: quality.add_item(label)
+	quality.select(g.graphics.PRESETS.find(g.graphics.preset))
+	quality.custom_minimum_size.y = 48
+	quality.get_popup().add_theme_stylebox_override("panel", Kit.box(false, 10))
+	quality.get_popup().add_theme_stylebox_override("hover", Kit.box(true, 8))
+	quality.get_popup().add_theme_color_override("font_color", Kit.TEXT)
+	quality.get_popup().add_theme_color_override("font_hover_color", Kit.TEAL)
+	quality.item_selected.connect(func(index): g.graphics.choose(g.graphics.PRESETS[index]); ui.build_panel())
+	graphics_card.add_child(quality)
+	ui.text(graphics_card, g.graphics.description(), 16)
+	live_label(graphics_card, func(): return g.graphics.status(), 16)
+	var shadows = CheckButton.new()
+	shadows.name = "GraphicsShadows"
+	shadows.text = "Тени солнца и деревьев"
+	shadows.button_pressed = g.graphics.shadows
+	shadows.custom_minimum_size.y = 44
+	shadows.toggled.connect(func(on): g.graphics.set_shadows(on))
+	graphics_card.add_child(shadows)
+	var nature = CheckButton.new()
+	nature.name = "GraphicsNature"
+	nature.text = "Ветер, пыль, дождь и брызги"
+	nature.button_pressed = g.graphics.nature
+	nature.custom_minimum_size.y = 44
+	nature.toggled.connect(func(on): g.graphics.set_nature(on))
+	graphics_card.add_child(nature)
+	ui.text(graphics_card, "Чёткость картинки · в режиме «Авто» подстраивается сама", 14)
+	var clarity = HSlider.new()
+	clarity.name = "GraphicsClarity"
+	clarity.min_value = 0.6
+	clarity.max_value = 1.0
+	clarity.step = 0.05
+	clarity.value = g.graphics.scale
+	clarity.editable = g.graphics.preset != "auto"
+	clarity.custom_minimum_size.y = 36
+	clarity.value_changed.connect(func(value): g.graphics.set_scale(value))
+	graphics_card.add_child(clarity)
 	var card = Kit.card(ui.content)
 	ui.text(card, "Звук и путешествие", 23)
 	if OS.has_feature("web"):

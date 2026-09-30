@@ -8,6 +8,8 @@ var current_name = "Ясно"
 var solar_factor = 1.0
 var rain: CPUParticles3D
 var rain_audio: AudioStreamPlayer
+var visual_clock = 0.0
+var was_snowing = false
 const STATES = ["Ясно", "Облачно", "Дождь", "Туман", "Ясно"]
 
 func _ready():
@@ -50,13 +52,18 @@ func update_weather(game: Node, delta: float):
 	current_name = ["Ясно", "Облачно", "Снегопад" if snowing else "Дождь", "Туман", "Снегопад" if snowing else "Ливень"][index]
 	var solar_target = [1.0, 0.55, 0.10 if snowing else 0.30, 0.15, 0.10 if snowing else 0.05][index]
 	solar_factor = move_toward(solar_factor, solar_target, transition / 15.0)
-	rain.mesh.size = Vector3(0.065, 0.065, 0.065) if snowing else Vector3(0.018, 0.6, 0.018)
+	visual_clock += delta
+	if visual_clock < 0.1 and delta > 0: return
+	visual_clock = 0.0
+	if snowing != was_snowing:
+		was_snowing = snowing
+		rain.mesh.size = Vector3(0.065, 0.065, 0.065) if snowing else Vector3(0.018, 0.6, 0.018)
 	rain.initial_velocity_min = 2.5 if snowing else 18.0
 	rain.initial_velocity_max = 4.0 if snowing else 24.0
 	rain.gravity = Vector3(0.5, -0.3, 0) if snowing else Vector3(1, -4, 0)
 	rain.mesh.material.albedo_color = Color.WHITE if snowing else Color(0.6, 0.75, 0.83, 0.45)
 	rain.mesh.material.albedo_color.a = intensity * 0.45
 	rain.global_position = game.van.position + Vector3(0, 8, 0)
-	rain.emitting = intensity > 0.05 and game.started and not game.paused and game.world.director.tunnel_at(game.van.position).is_empty()
+	rain.emitting = game.graphics.nature and intensity > 0.05 and game.started and not game.paused and game.world.director.tunnel_at(game.van.position).is_empty()
 	game.world.road_material.set_shader_parameter("wetness", wetness)
 	game.world.terrain_material.set_shader_parameter("wetness", wetness)

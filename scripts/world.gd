@@ -9,6 +9,7 @@ var chunks: Dictionary = {}
 var obstacles: Dictionary = {}
 var noise = FastNoiseLite.new()
 var terrain_material = ShaderMaterial.new()
+var tree_material = ShaderMaterial.new()
 var surface_effects: Node
 var wildlife: Array[Node3D] = []
 var grass_material = ShaderMaterial.new()
@@ -33,13 +34,15 @@ func _ready():
 	noise.frequency = 0.006
 	noise.fractal_octaves = 4
 	terrain_material.shader = load("res://shaders/terrain.gdshader")
-	terrain_material.set_shader_parameter("web_lite", OS.has_feature("web"))
+	tree_material.shader = load("res://shaders/foliage.gdshader")
 	grass_material.shader = load("res://shaders/grass.gdshader")
 	water_material.shader = load("res://shaders/river.gdshader")
 	lake_material.shader = load("res://shaders/lake.gdshader")
 	water_materials = [water_material, lake_material]
 	road_material.shader = load("res://shaders/gravel.gdshader")
-	road_material.set_shader_parameter("web_lite", OS.has_feature("web"))
+	var detail = load("res://assets/materials/ground-detail.png")
+	terrain_material.set_shader_parameter("ground_detail", detail)
+	road_material.set_shader_parameter("ground_detail", detail)
 	wood = material(Color("82705b"))
 	marker = material(Color("e7d8ad"))
 	rock_mesh = SphereMesh.new()
@@ -384,7 +387,7 @@ func build_tree_mesh():
 		quad(st, Vector3(cos(a) * 0.22, 0, sin(a) * 0.22), Vector3(cos(a) * 0.22, 3, sin(a) * 0.22), Vector3(cos(b) * 0.22, 3, sin(b) * 0.22), Vector3(cos(b) * 0.22, 0, sin(b) * 0.22), Color("6b5341"))
 	st.generate_normals()
 	tree_mesh = st.commit()
-	tree_mesh.surface_set_material(0, terrain_material)
+	tree_mesh.surface_set_material(0, tree_material)
 
 func box(parent: Node3D, pos: Vector3, size: Vector3, mat: Material) -> MeshInstance3D:
 	var node = MeshInstance3D.new()

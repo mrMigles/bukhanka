@@ -48,6 +48,7 @@ jobs:
           export XDG_DATA_HOME="$RUNNER_TEMP/bukhanka-test"
           "$GODOT" --headless --path . --editor --import --quit
           "$GODOT" --headless --path . --script res://tests/expedition.gd -- --test-mode
+          "$GODOT" --headless --path . --script res://tests/graphics.gd -- --test-mode
       - uses: actions/upload-artifact@v4
         with:
           name: bukhanka-web

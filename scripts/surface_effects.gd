@@ -8,6 +8,8 @@ var rings = PackedVector4Array()
 var ring_heights = PackedFloat32Array()
 var ring_cursor = 0
 var ring_clock = 0.0
+var ripple_limit = 8
+var shader_clock = 0.0
 var stamp_clock = 0.0
 var tracks_dirty = false
 var coating = 0.0
@@ -104,7 +106,7 @@ func update_surface(delta: float):
 		var wheel = game.van.wheels[i]
 		var contact = wheel.global_position - Vector3(0, 0.55 * wheel.scale.x, 0)
 		splashes[i].global_position = contact + Vector3(0, 0.2, 0)
-		splashes[i].emitting = moving and (water or (muddy and game.dynamics.throttle_load > 0.5))
+		splashes[i].emitting = game.graphics.nature and moving and (water or (muddy and game.dynamics.throttle_load > 0.5))
 		splashes[i].mesh.material.albedo_color = Color("b1d8d0") if water else Color("624832")
 		splashes[i].initial_velocity_max = minf(5.0, 1.8 + abs(game.speed) * 0.5)
 		if moving and not water and stamp_clock > 0.10:
@@ -122,21 +124,37 @@ func update_surface(delta: float):
 		if cells.size() > 24000:
 			var keys = cells.keys()
 			for i in range(4000): cells.erase(keys[i])
-	if water and moving and ring_clock > 0.22:
+	if game.graphics.nature and water and moving and ring_clock > 0.22:
 		ring_clock = 0
 		emit_ripple(p, minf(abs(game.speed) / 3, 1))
-	for mat in game.world.water_materials:
-		mat.set_shader_parameter("rings", rings)
-		mat.set_shader_parameter("ring_heights", ring_heights)
-		mat.set_shader_parameter("sim_time", game.model.simulation_seconds)
-	game.world.water_material.set_shader_parameter("vehicle", p)
-	game.world.water_material.set_shader_parameter("disturbance", minf(abs(game.speed) * 0.2, 1) if water else 0.0)
 	game.world.terrain_material.set_shader_parameter("vehicle", p)
 	game.world.road_material.set_shader_parameter("vehicle", p)
+	game.world.terrain_material.set_shader_parameter("vehicle_heading", game.heading)
+	game.world.road_material.set_shader_parameter("vehicle_heading", game.heading)
+	shader_clock += delta
+	if shader_clock >= 0.05 or delta == 0:
+		shader_clock = 0.0
+		var active = PackedVector4Array()
+		var heights = PackedFloat32Array()
+		for i in range(16):
+			if rings[i].w > 0 and rings[i].z < 4.0 and active.size() < ripple_limit:
+				active.append(rings[i])
+				heights.append(ring_heights[i])
+		var count = active.size() if game.graphics.nature else 0
+		active.resize(16)
+		heights.resize(16)
+		for mat in game.world.water_materials:
+			mat.set_shader_parameter("rings", active)
+			mat.set_shader_parameter("ring_heights", heights)
+			mat.set_shader_parameter("ripple_count", count)
+			mat.set_shader_parameter("sim_time", game.model.simulation_seconds)
+			mat.set_shader_parameter("vehicle", p)
+		game.world.water_material.set_shader_parameter("disturbance", minf(abs(game.speed) * 0.2, 1) if water else 0.0)
 
 func emit_ripple(position: Vector3, strength: float):
 	var sample = game.world.sample_water(position)
 	if not sample.present: return
+	ring_cursor = posmod(ring_cursor, ripple_limit)
 	rings[ring_cursor] = Vector4(position.x, position.z, 0, clampf(strength, 0, 1))
 	ring_heights[ring_cursor] = sample.height
-	ring_cursor = (ring_cursor + 1) % 16
+	ring_cursor = (ring_cursor + 1) % ripple_limit

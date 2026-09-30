@@ -11,7 +11,7 @@ func setup(game: Node):
 	game.environment.sky.radiance_size = Sky.RADIANCE_SIZE_64
 	game.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	game.environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	game.environment.tonemap_exposure = 0.85
+	game.environment.tonemap_exposure = 1.05
 	game.environment.tonemap_white = 6.0
 	game.environment.ssao_enabled = true
 	game.environment.ssao_radius = 1.1
@@ -60,10 +60,10 @@ func update(game: Node, dt: float):
 	game.sun.light_energy = pow(maxf(0, altitude), 0.65) * 0.85 * (1.0 - weather.cloud * 0.65)
 	game.sun.light_color = Color("ffdda9").lerp(Color("ff995e"), twilight)
 	game.environment.ambient_light_color = Color("93adc9").lerp(Color("7186a4"), night)
-	game.environment.ambient_light_energy = lerpf(0.22 + maxf(0, altitude) * 0.08, 0.16, night)
+	game.environment.ambient_light_energy = lerpf(0.30 + maxf(0, altitude) * 0.10, 0.16, night)
 	var fog = Color("b6cbd0").lerp(Color("df9980"), twilight * 0.65).lerp(Color("24364c"), night)
 	game.environment.fog_light_color = fog.lerp(Color("98a9af").lerp(Color("647582"), night), weather.cloud * 0.55)
-	game.environment.fog_density = 0.0011 + weather.mist * 0.004 + weather.intensity * 0.0009
+	game.environment.fog_density = 0.00075 + weather.mist * 0.004 + weather.intensity * 0.0009
 	var in_tunnel = not game.world.director.tunnel_at(game.van.position).is_empty()
 	for light in headlights:
 		light.visible = game.started and (night > 0.1 or in_tunnel or weather.mist > 0.5) and model.energy > 0

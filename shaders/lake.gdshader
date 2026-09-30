@@ -2,14 +2,19 @@ shader_type spatial;
 render_mode cull_disabled;
 uniform vec4 rings[16];
 uniform float ring_heights[16];
+uniform int ripple_count = 0;
+uniform vec3 vehicle = vec3(0.0,-10000.0,0.0);
+uniform float effects_strength = 1.0;
 uniform float sim_time = 0.0;
 uniform vec3 sky_tint = vec3(0.45,0.62,0.69);
 varying vec3 wp;
 void vertex(){wp=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;}
 void fragment(){
- float t=sim_time;
+ float t=sim_time*effects_strength;
  float ripple=0.0;
- for(int i=0;i<16;i++){float d=length(wp.xz-rings[i].xy);float age=rings[i].z;ripple+=sin((d-age*2.0)*8.0)*exp(-abs(d-age*2.0)*2.5)*max(0.0,1.0-age/4.0)*rings[i].w*step(abs(wp.y-ring_heights[i]),.6);}
+ if(ripple_count>0 && effects_strength>0.0 && distance(wp.xz,vehicle.xz)<12.0){
+ for(int i=0;i<16;i++){if(i>=ripple_count)break;float d=length(wp.xz-rings[i].xy);float age=rings[i].z;float band=abs(d-age*2.0);if(band<.8)ripple+=sin((d-age*2.0)*8.0)*(1.0-smoothstep(0.0,.8,band))*max(0.0,1.0-age/4.0)*rings[i].w*step(abs(wp.y-ring_heights[i]),.6);}
+ }
  float n=sin(wp.x*1.3+t*.8)*sin(wp.z*.9-t*.5);
  float edge=1.0-smoothstep(0.0,0.14,COLOR.r);
  float fresnel=pow(1.0-clamp(dot(normalize(NORMAL),normalize(VIEW)),0.0,1.0),4.0);

@@ -11,6 +11,7 @@ var auto_controller = preload("res://scripts/autopilot_controller.gd").new()
 var lighting = preload("res://scripts/lighting_controller.gd").new()
 var dialogues = preload("res://scripts/dialogue_director.gd").new()
 var saves = preload("res://scripts/save_service.gd").new()
+var graphics = preload("res://scripts/graphics_settings.gd").new()
 var rpg_ui: Control
 var camp_location = Vector3.ZERO
 var restore_camping = false
@@ -108,9 +109,7 @@ var chatter = [
 
 func _ready():
 	test_mode = "--test-mode" in OS.get_cmdline_user_args()
-	if OS.has_feature("web"):
-		get_viewport().msaa_3d = Viewport.MSAA_DISABLED
-		get_viewport().scaling_3d_scale = 0.68
+	graphics.load_preferences(test_mode)
 	saves.backup_legacy(test_mode)
 	var fresh = get_tree().root.get_meta("fresh_expedition", false)
 	get_tree().root.remove_meta("fresh_expedition")
@@ -171,6 +170,7 @@ func _ready():
 	tutorial = preload("res://scripts/tutorial.gd").new()
 	tutorial.game = self
 	layer.add_child(tutorial)
+	graphics.setup(self)
 	projects.on_calendar(self)
 	weather.update_weather(self, 0.0)
 	next_dialogue()
@@ -206,8 +206,9 @@ func setup_environment():
 	sun.rotation_degrees = Vector3(-31, -37, 0)
 	sun.light_color = Color("ffdfac")
 	sun.light_energy = 1.0
-	sun.shadow_enabled = not OS.has_feature("web")
-	sun.directional_shadow_max_distance = 110 if OS.has_feature("web") else 170
+	sun.shadow_enabled = true
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+	sun.directional_shadow_max_distance = 75
 	add_child(sun)
 
 func setup_dust():
@@ -218,15 +219,18 @@ func setup_dust():
 	dust.local_coords = false
 	dust.direction = Vector3(0, 0.3, -1)
 	dust.spread = 30
-	dust.initial_velocity_min = 0.4
-	dust.initial_velocity_max = 1.4
+	dust.initial_velocity_min = 0.6
+	dust.initial_velocity_max = 2.0
 	dust.gravity = Vector3(0, 0.25, 0)
-	dust.scale_amount_min = 0.13
-	dust.scale_amount_max = 0.5
-	var mesh = SphereMesh.new()
-	mesh.radial_segments = 5
-	mesh.rings = 2
+	dust.scale_amount_min = 0.35
+	dust.scale_amount_max = 1.2
+	var mesh = QuadMesh.new()
+	mesh.size = Vector2.ONE
 	dust.mesh = mesh
+	var fade = Gradient.new()
+	fade.offsets = PackedFloat32Array([0.0, 0.18, 0.7, 1.0])
+	fade.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 0.9), Color(1, 1, 1, 0.45), Color(1, 1, 1, 0)])
+	dust.color_ramp = fade
 	var dust_mat = ShaderMaterial.new()
 	dust_mat.shader = load("res://shaders/dust.gdshader")
 	dust.material_override = dust_mat
@@ -376,6 +380,7 @@ func drive(delta: float):
 		model.add_journal("Проехали %d км" % km)
 func _process(delta):
 	if not is_instance_valid(ui): return
+	graphics.tick(delta)
 	chunk_timer += delta
 	if chunk_timer > 0.18:
 		world.update_chunks(van.position.z)
@@ -383,7 +388,7 @@ func _process(delta):
 	van.animate(speed, time)
 	update_camera(delta)
 	dust.position = van.position + Vector3(0, 0.4, -1.4).rotated(Vector3.UP, heading)
-	dust.emitting = abs(speed) > 3 and not camping and simulation_running() and weather.wetness < 0.4
+	dust.emitting = graphics.nature and abs(speed) > 3 and not camping and simulation_running() and weather.wetness < 0.4
 	engine_audio.pitch_scale = clampf(dynamics.rpm / 1100.0, 0.7, 2.8)
 	rain_audio.volume_db = -60 + weather.intensity * 46
 	music_audio.volume_db = lerpf(music_audio.volume_db, (-25.0 if dialogues.voice.playing else -14.0 if crew_system.guitar_active() else -24.0) if camping else -45.0, minf(1, delta * 1.5))
