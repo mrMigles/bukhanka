@@ -58,7 +58,17 @@ async function main() {
           assert(!(v.width/2>=b.x&&v.width/2<=b.x+b.width&&v.height/2>=b.y&&v.height/2<=b.y+b.height),'Control blocks centre');
           area+=b.width*b.height;
         }
-        assert(area/(v.width*v.height)<.14, 'Driving controls occupy too much of the view');
+        const gauge=s.speedometer;
+        assert(gauge.width>=79&&gauge.height>=79,'Missing circular speedometer');
+        assert(gauge.x>=0&&gauge.y>=0&&gauge.x+gauge.width<=v.width+1&&gauge.y+gauge.height<=v.height+1,'Speedometer exceeds viewport');
+        for(const b of Object.values(s.controls)) {
+          assert(gauge.x+gauge.width<=b.x+1||b.x+b.width<=gauge.x+1||gauge.y+gauge.height<=b.y+1||b.y+b.height<=gauge.y+1,'Speedometer overlaps a button');
+        }
+        assert(s.hud_icons.MobileCamp==='camp','Camp quick action has no tent icon');
+        for(const icon of ['camp','projects','crew','upgrades','journal','settings'])
+          assert(Object.values(s.hud_icons).includes(icon),'Main-screen icon missing: '+icon);
+        area+=Math.PI*40*40;
+        assert(area/(v.width*v.height)<(v.width<360?.22:.14), 'Driving HUD occupies too much of the view');
       }
       await shot('title');
       const loadMs=Date.now()-started;
@@ -94,6 +104,8 @@ async function main() {
         await send('touchMove',[joy]);
         await page.waitForTimeout(2000);
         assert((await state()).speed>3,'Joystick does not drive');
+        const driving=await state();
+        assert(Math.abs(Number(driving.speed_text)-Math.round(Math.abs(driving.speed)*3.6))<=3,'Speedometer does not display vehicle speed');
         let look={id:2,x:100,y:230};
         await send('touchStart',[joy,look]);
         look={...look,x:235};
@@ -131,6 +143,12 @@ async function main() {
         assert((await state()).low_range&&!(await state()).tools,'Quick low range action failed');
         await tapControl('MobileLowRange');
         assert(!(await state()).low_range,'Quick high range action failed');
+        await tapControl('MobileCamp');
+        assert((await state()).panel==='placement'&&!(await state()).running,'Camp quick action does not open placement');
+        checkPanel(await state());
+        await shot('quick-camp');
+        await tapText('×');
+        await page.waitForFunction(()=>window.bukhankaTestState?.running);
         await tapControl('MobileTools');
         assert((await state()).tools&&!(await state()).running,'Tools do not pause simulation');
         const parked=(await state()).position;

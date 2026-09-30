@@ -5,6 +5,15 @@ const TEXT = Color("eef8f5")
 const MUTED = Color("9fc5c8")
 static var icons: Dictionary = {}
 
+static func draw_speedometer(canvas: Control, speed_kmh: float, radius: float):
+	var center = Vector2.ONE * radius
+	var ring = radius * 72.0 / 88.0
+	var thickness = maxf(3, radius * 7.0 / 88.0)
+	canvas.draw_circle(center, radius, Color(0.01, 0.08, 0.09, 0.92))
+	canvas.draw_arc(center, radius - 1, 0, TAU, 72, MUTED, 1, true)
+	canvas.draw_arc(center, ring, PI * 0.78, PI * 2.22, 64, Color("264b4c"), thickness, true)
+	canvas.draw_arc(center, ring, PI * 0.78, PI * 0.78 + PI * 1.44 * clampf(speed_kmh / 60, 0.005, 1), 64, TEAL, thickness, true)
+
 static func button_content(button: Button, key: String, caption: String = "", stacked: bool = false):
 	button.text = ""
 	button.icon = null

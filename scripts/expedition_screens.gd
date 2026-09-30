@@ -492,7 +492,8 @@ func build_placement():
 	var view = Kit.card(columns)
 	ui.text(view, "Площадка у маршрута", 21)
 	var container = SubViewportContainer.new()
-	container.custom_minimum_size = Vector2(420, 360)
+	var mobile = is_instance_valid(g.touch_controls) and g.touch_controls.enabled
+	container.custom_minimum_size = Vector2(0, 190) if mobile else Vector2(420, 360)
 	container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	container.stretch = true
 	view.add_child(container)
@@ -507,19 +508,20 @@ func build_placement():
 	preview_camera.position = g.van.position + Vector3(18, 36, 24)
 	preview_camera.look_at(g.van.position)
 	container.gui_input.connect(func(event):
-		if event is InputEventMouseButton:
+		if event is InputEventScreenTouch: dragging = event.pressed
+		if event is InputEventMouseButton and event.device != InputEvent.DEVICE_ID_EMULATION:
 			if event.button_index == MOUSE_BUTTON_LEFT: dragging = event.pressed
 			if event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
 				angle += PI / 2 * (1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1)
 				dirty = true
-		if event is InputEventMouseMotion and dragging:
+		if dragging and (event is InputEventScreenDrag or (event is InputEventMouseMotion and event.device != InputEvent.DEVICE_ID_EMULATION)):
 			var right = preview_camera.global_basis.x
 			var forward = preview_camera.global_basis.y
 			candidate += (right * event.relative.x - forward * event.relative.y) * 48.0 / maxf(1, container.size.x)
 			dirty = true
 	)
-	ui.text(view, "Перетаскивайте площадку мышью. Колесо — поворот.\nЗелёная сетка: можно поставить. Красная: найдите другое место.", 14)
-	var stats = Kit.card(columns, 260)
+	ui.text(view, "Двигайте площадку пальцем. Поворот — кнопкой ниже.\nЗелёная сетка: можно поставить лагерь." if mobile else "Перетаскивайте площадку мышью. Колесо — поворот.\nЗелёная сетка: можно поставить. Красная: найдите другое место.", 14)
+	var stats = Kit.card(columns, 0 if mobile else 260)
 	ui.text(stats, "Оценка места", 23)
 	for entry in [["Ровность", "flatness"], ["Укрытие рельефом", "shelter"], ["Солнечный свет", "sun"], ["Близость к воде", "water"], ["Подъезд", "access"]]:
 		var key = str(entry[1])
@@ -550,6 +552,7 @@ func assess():
 	candidate = assessment.position
 	place_button.disabled = not assessment.valid
 	assessment_label.text = "+%.0f%% к работе\n+%.0f%% к восстановлению\n\n%s" % [assessment.work_bonus * 100, assessment.rest_bonus * 100, "Сухая площадка в пределах 36 м от машины." if assessment.valid else "Есть вода, препятствия, крутой склон или машина слишком далеко."]
+	if is_instance_valid(preview): preview.render_target_update_mode = SubViewport.UPDATE_ONCE
 	if is_instance_valid(ghost): ghost.queue_free()
 	ghost = MeshInstance3D.new()
 	var mesh = ImmediateMesh.new()

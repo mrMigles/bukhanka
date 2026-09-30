@@ -7,11 +7,15 @@ static func publish(g: Node):
 	var buttons: Array = []
 	for node in [g.ui, g.rpg_ui, g.tutorial, g.touch_controls]: collect_buttons(node, factor, buttons)
 	var t = g.touch_controls
+	var icons = {}
+	for b in t.action_buttons:
+		if b.has_meta("hud_icon"): icons[str(b.name)] = b.get_meta("hud_icon")
 	var state = {"started": g.started, "paused": g.paused, "running": g.simulation_running(), "tutorial": g.tutorial.visible,
 		"speed": g.speed, "position": [g.van.position.x, g.van.position.z], "heading": g.heading, "velocity": [g.dynamics.velocity.x, g.dynamics.velocity.z],
 		"yaw": g.orbit_yaw, "pitch": g.orbit_pitch, "follow_clock": g.camera_motion_clock, "camera_mode": g.camera_mode, "fps": Engine.get_frames_per_second(),
 		"panel": g.rpg_ui.section if g.rpg_ui.overlay.visible else "", "panel_bounds": bounds(g.rpg_ui.body, factor), "low_range": g.low_range, "tools": t.tools_open, "touch": t.enabled, "throttle": t.throttle, "steer": t.steer, "braking": t.braking,
-		"joystick": {"x": t.center.x, "y": t.center.y, "radius": 52}, "controls": t.hud.button_rects(), "buttons": buttons}
+		"joystick": {"x": t.center.x, "y": t.center.y, "radius": 52}, "controls": t.hud.button_rects(), "buttons": buttons,
+		"hud_icons": icons, "speedometer": bounds(t.hud.gauge, factor), "speed_text": t.hud.speed.text}
 	var overflowing: Array = []
 	collect_overflow(g.rpg_ui.body, factor, width, overflowing)
 	state["overflow"] = overflowing

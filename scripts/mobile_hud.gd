@@ -12,6 +12,9 @@ var menu: Button
 var camera: Button
 var more: Button
 var gear: Button
+var camp: Button
+var navigation: Array[Button] = []
+var gauge: Control
 var tools: Control
 var tools_card: PanelContainer
 var tool_buttons: Array[Button] = []
@@ -20,6 +23,8 @@ var auto_button: Button
 var brake_normal: StyleBoxFlat
 var brake_active: StyleBoxFlat
 var last_braking = false
+var last_low_range = -1
+var last_camping = -1
 
 func build(owner_touch: Control):
 	touch = owner_touch
@@ -31,8 +36,18 @@ func build(owner_touch: Control):
 	header.modulate.a = 0.88
 	location = g.ui.label(header, "", Vector2(12, 7), 13)
 	conditions = g.ui.label(header, "", Vector2(12, 27), 11, Kit.MUTED)
-	menu = icon_button(parent, "MobileMenu", "menu", func(): g.rpg_ui.open_panel("camp"))
-	menu.tooltip_text = "Меню экспедиции"
+	# The same main-screen navigation icons as the desktop HUD.
+	menu = icon_button(parent, "MobileMenu", "camp", func(): g.rpg_ui.open_panel("camp"))
+	menu.tooltip_text = "Лагерь и меню экспедиции"
+	navigation.append(menu)
+	for entry in [["projects", "Проекты"], ["crew", "Команда"], ["upgrades", "Мастерская"], ["journal", "Дневник"]]:
+		var key = str(entry[0])
+		var b = icon_button(parent, "MobileNav_" + key, key, func(): g.rpg_ui.open_panel(key))
+		b.tooltip_text = entry[1]
+		navigation.append(b)
+	var settings = icon_button(parent, "MobileSettings", "settings", func(): g.rpg_ui.open_panel("settings"))
+	settings.tooltip_text = "Настройки"
+	navigation.append(settings)
 	camera = icon_button(parent, "MobileCamera", "camera", func(): g.cycle_camera())
 	camera.tooltip_text = "Сменить камеру"
 	more = icon_button(parent, "MobileTools", "more", func(): touch.toggle_tools())
@@ -41,6 +56,12 @@ func build(owner_touch: Control):
 	gear.name = "MobileLowRange"
 	gear.tooltip_text = "Пониженная передача · 4L"
 	gear.add_theme_font_size_override("font_size", 16)
+	camp = icon_button(parent, "MobileCamp", "camp", func():
+		touch.reset_input()
+		if g.camping: g.toggle_camp()
+		else: g.rpg_ui.open_panel("placement")
+	)
+	camp.tooltip_text = "Разбить лагерь / отправиться в путь"
 	touch.brake_button = g.ui.button(parent, "Тормоз", Rect2(), func(): pass)
 	touch.brake_button.name = "MobileBrake"
 	touch.brake_button.add_theme_font_size_override("font_size", 12)
@@ -53,13 +74,18 @@ func build(owner_touch: Control):
 	touch.brake_button.add_theme_stylebox_override("normal", brake_normal)
 	touch.brake_button.add_theme_stylebox_override("pressed", brake_active)
 	touch.brake_button.add_theme_stylebox_override("hover", brake_normal)
-	speed = g.ui.label(parent, "00", Vector2.ZERO, 24)
+	gauge = Control.new()
+	gauge.name = "MobileSpeedometer"
+	gauge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(gauge)
+	gauge.draw.connect(func(): Kit.draw_speedometer(gauge, absf(g.speed) * 3.6, 40))
+	speed = g.ui.label(gauge, "00", Vector2(12, 19), 26)
 	speed.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	speed.size = Vector2(72, 30)
+	speed.size = Vector2(56, 32)
 	speed.add_theme_constant_override("outline_size", 3)
-	drive_mode = g.ui.label(parent, "", Vector2.ZERO, 11, Kit.MUTED)
+	drive_mode = g.ui.label(gauge, "", Vector2(2, 50), 9, Kit.MUTED)
 	drive_mode.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	drive_mode.size = Vector2(92, 30)
+	drive_mode.size = Vector2(76, 18)
 	drive_mode.add_theme_constant_override("outline_size", 2)
 	notice = g.ui.label(parent, "", Vector2.ZERO, 12, Kit.TEXT, 300)
 	notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -95,11 +121,13 @@ func build(owner_touch: Control):
 		elif event is InputEventMouseButton and event.pressed: touch.close_tools()
 	)
 	tools.hide()
-	touch.action_buttons.assign([menu, camera, more, gear, touch.brake_button])
+	touch.action_buttons.assign(navigation)
+	touch.action_buttons.append_array([camera, more, gear, camp, touch.brake_button])
 
 func icon_button(parent: Control, node_name: String, icon: String, action: Callable) -> Button:
 	var b = touch.game.ui.button(parent, "", Rect2(), action)
 	b.name = node_name
+	b.set_meta("hud_icon", icon)
 	Kit.button_content(b, icon)
 	b.get_meta("symbol").custom_minimum_size = Vector2(24, 24)
 	for state in ["normal", "hover", "pressed"]:
@@ -123,8 +151,10 @@ func layout(view: Vector2, safe: Vector4):
 	var bottom = view.y - 14.0 - safe.w
 	header.position = Vector2(left, top)
 	header.size = Vector2(minf(280, right - left - 58), 48)
-	menu.position = Vector2(right - 48, top)
-	menu.size = Vector2(48, 48)
+	for i in range(navigation.size()):
+		var b = navigation[i]
+		b.position = Vector2(right - 44, top) if i == 5 else Vector2(left + i * 52, top + 58)
+		b.size = Vector2(44, 44)
 	touch.center = Vector2(left + 54, bottom - 54)
 	touch.brake_button.position = Vector2(right - 72, bottom - 72)
 	touch.brake_button.size = Vector2(72, 72)
@@ -134,9 +164,12 @@ func layout(view: Vector2, safe: Vector4):
 	more.size = Vector2(44, 44)
 	gear.position = Vector2(right - 148, bottom - 126)
 	gear.size = Vector2(44, 44)
-	speed.position = Vector2((left + right) * 0.5 - 36, bottom - 58)
-	drive_mode.position = Vector2((left + right) * 0.5 - 46, bottom - 29)
-	notice.position = Vector2(left + 8, top + 58)
+	camp.position = Vector2(right - 44, bottom - 178)
+	camp.size = Vector2(44, 44)
+	var instrument_center = (touch.center.x + 52 + touch.brake_button.position.x) * 0.5
+	gauge.position = Vector2(instrument_center - 40, bottom - 80)
+	gauge.size = Vector2(80, 80)
+	notice.position = Vector2(left + 8, top + 110)
 	notice.size = Vector2(right - left - 16, 42)
 	tools.position = Vector2.ZERO
 	tools.size = view
@@ -152,13 +185,19 @@ func refresh():
 	var minutes = int(fposmod(m.phase() * 1440 + 300, 1440))
 	conditions.text = "%s · %02d:%02d · заряд %.0f%%" % [g.weather.current_name, minutes / 60, minutes % 60, m.percent()]
 	speed.text = "%02d" % roundi(abs(g.speed) * 3.6)
-	drive_mode.text = "км/ч · %s" % ["Стоянка" if g.camping else "4L" if g.low_range else "Авто" if g.autopilot else "4H"]
+	drive_mode.text = "км/ч · %s" % ["P" if g.camping else "4L" if g.low_range else "Авто" if g.autopilot else "4H"]
+	gauge.queue_redraw()
 	notice.text = g.ui.toast_label.text if g.toast_timer > 0 else g.auto_controller.status if g.autopilot else ""
 	notice.visible = not notice.text.is_empty() and not touch.tools_open
 	notice.modulate.a = minf(1, g.toast_timer) if g.toast_timer > 0 else 1.0
 	low_button.text = "Обычная · 4H" if g.low_range else "Пониженная · 4L"
 	gear.text = "4L" if g.low_range else "4H"
-	gear.add_theme_stylebox_override("normal", Kit.box(g.low_range, 0))
+	if last_low_range != int(g.low_range):
+		last_low_range = int(g.low_range)
+		gear.add_theme_stylebox_override("normal", Kit.box(g.low_range, 0))
+	if last_camping != int(g.camping):
+		last_camping = int(g.camping)
+		camp.add_theme_stylebox_override("normal", Kit.box(g.camping, 0))
 	auto_button.text = "За руль" if g.autopilot else "Автопилот"
 	if last_braking != touch.braking:
 		last_braking = touch.braking

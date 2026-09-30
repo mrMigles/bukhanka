@@ -149,7 +149,4 @@ func refresh():
 	gauge.queue_redraw()
 
 func draw_speed():
-	gauge.draw_circle(Vector2(87, 87), 88, Color(0.01, 0.08, 0.09, 0.92))
-	gauge.draw_arc(Vector2(87, 87), 87, 0, TAU, 72, Kit.MUTED, 1, true)
-	gauge.draw_arc(Vector2(87, 87), 72, PI * 0.78, PI * 2.22, 64, Color("264b4c"), 7, true)
-	gauge.draw_arc(Vector2(87, 87), 72, PI * 0.78, PI * 0.78 + PI * 1.44 * clampf(absf(ui.game.speed) * 3.6 / 60, 0.005, 1), 64, Kit.TEAL, 7, true)
+	Kit.draw_speedometer(gauge, absf(ui.game.speed) * 3.6, 88)
